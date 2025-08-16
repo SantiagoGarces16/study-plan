@@ -22,23 +22,35 @@
       "id": 1755312367760,
       "text": "HTML",
       "date": "2025-09-01",
-      "milestoneId": "1755312360666"
+      "milestoneId": null
     },
     {
       "id": 1755312367770,
       "text": "Responsive Web Design",
       "date": "2025-09-01",
-      "milestoneId": "1755312360666"
+      "milestoneId": null
+    },
+    {
+      "id": 1755373500429,
+      "text": "CSS",
+      "date": "2025-10-16",
+      "milestoneId": 1755373145255
+    },
+    {
+      "id": 1755373500457,
+      "text": "JavaScript",
+      "date": "2025-10-16",
+      "milestoneId": 1755373145255
     }
   ],
   "milestones": [
     {
-      "id": 1755312360666,
+      "id": 1755373145255,
       "text": "create a website",
-      "date": "2025-09-01",
+      "date": "2025-10-16",
       "topics": [
-        1755312367760,
-        1755312367770
+        1755373500429,
+        1755373500457
       ]
     }
   ]
