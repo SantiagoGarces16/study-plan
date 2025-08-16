@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Career Study Plan</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Career Study Plan</h1>
+        <div class="milestones">
+            <h2>Milestones</h2>
+            <ul id="milestones-list"></ul>
+            <form id="add-milestone-form">
+                <input type="text" id="milestone-input" placeholder="Enter a new milestone" required>
+                <input type="date" id="milestone-date-input" required>
+                <button type="submit">Add Milestone</button>
+            </form>
+        </div>
+        <div class="plan">
+            <h2>Study Topics</h2>
+            <ul id="topics-list"></ul>
+            <form id="add-topic-form">
+                <input type="text" id="topic-input" placeholder="Enter a new topic" required>
+                <input type="date" id="topic-date-input" required>
+                <select id="milestone-select">
+                    <option value="">Assign to Milestone (Optional)</option>
+                </select>
+                <button type="submit">Add Topic</button>
+            </form>
+        </div>
+        <div class="calendar">
+            <h2>Calendar</h2>
+            <div id="calendar-container"></div>
+        </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
+    <script src="app.js"></script>
+
+    <!-- Suggestions Modal -->
+    <div id="suggestions-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn">&times;</span>
+            <h2>Suggested Topics</h2>
+            <div id="suggestions-list"></div>
+            <button id="add-selected-topics-btn">Add Selected Topics</button>
+        </div>
+    </div>
+
+    <!-- Edit Modal -->
+    <div id="edit-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn">&times;</span>
+            <h2>Edit Item</h2>
+            <input type="hidden" id="edit-id-input">
+            <input type="hidden" id="edit-type-input">
+            <input type="text" id="edit-text-input" placeholder="Enter new text">
+            <input type="date" id="edit-date-input">
+            <button id="save-edit-btn">Save Changes</button>
+        </div>
+    </div>
+</body>
+</html>

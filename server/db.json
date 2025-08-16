@@ -1,0 +1,45 @@
+{
+  "topics": [
+    {
+      "id": 1755308647276,
+      "text": "learn Rust",
+      "date": "2025-09-15",
+      "milestoneId": null
+    },
+    {
+      "id": 1755309819818,
+      "text": "Learn html",
+      "date": "2025-08-29",
+      "milestoneId": "1755309799161"
+    },
+    {
+      "id": 1755311159790,
+      "text": "JavaScript",
+      "date": "2025-09-26",
+      "milestoneId": "1755309799161"
+    },
+    {
+      "id": 1755312367760,
+      "text": "HTML",
+      "date": "2025-09-01",
+      "milestoneId": "1755312360666"
+    },
+    {
+      "id": 1755312367770,
+      "text": "Responsive Web Design",
+      "date": "2025-09-01",
+      "milestoneId": "1755312360666"
+    }
+  ],
+  "milestones": [
+    {
+      "id": 1755312360666,
+      "text": "create a website",
+      "date": "2025-09-01",
+      "topics": [
+        1755312367760,
+        1755312367770
+      ]
+    }
+  ]
+}
