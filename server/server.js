@@ -21,130 +21,184 @@ const writeData = (data) => {
 };
 
 // Topics API
-app.get('/api/topics', (req, res) => {
+// Plans API
+app.get('/api/plans', (req, res) => {
     const data = readData();
-    res.json(data.topics);
+    res.json(data.plans.map(p => ({ id: p.id, name: p.name })));
 });
 
-app.post('/api/topics', (req, res) => {
+app.post('/api/plans', (req, res) => {
     const data = readData();
-    const newTopic = {
+    const newPlan = {
         id: Date.now(),
-        text: req.body.text,
-        date: req.body.date,
-        milestoneId: req.body.milestoneId || null
+        name: req.body.name,
+        topics: [],
+        milestones: []
     };
-    data.topics.push(newTopic);
-    if (newTopic.milestoneId) {
-        const milestone = data.milestones.find(m => m.id == newTopic.milestoneId);
-        if (milestone) {
-            milestone.topics.push(newTopic.id);
-        }
-    }
+    data.plans.push(newPlan);
     writeData(data);
-    res.status(201).json(newTopic);
+    res.status(201).json(newPlan);
 });
 
-app.put('/api/topics/:id', (req, res) => {
+app.get('/api/plans/:planId', (req, res) => {
     const data = readData();
-    const { id } = req.params;
-    const { text, date, milestoneId } = req.body;
-    const topicIndex = data.topics.findIndex(t => t.id == id);
-    if (topicIndex > -1) {
-        const originalMilestoneId = data.topics[topicIndex].milestoneId;
-        data.topics[topicIndex] = { ...data.topics[topicIndex], text, date, milestoneId };
-
-        if (originalMilestoneId !== milestoneId) {
-            if (originalMilestoneId) {
-                const originalMilestone = data.milestones.find(m => m.id == originalMilestoneId);
-                if (originalMilestone) {
-                    originalMilestone.topics = originalMilestone.topics.filter(topicId => topicId != id);
-                }
-            }
-            if (milestoneId) {
-                const newMilestone = data.milestones.find(m => m.id == milestoneId);
-                if (newMilestone) {
-                    newMilestone.topics.push(id);
-                }
-            }
-        }
-        writeData(data);
-        res.json(data.topics[topicIndex]);
+    const plan = data.plans.find(p => p.id == req.params.planId);
+    if (plan) {
+        res.json(plan);
     } else {
-        res.status(404).send('Topic not found');
+        res.status(404).send('Plan not found');
     }
 });
 
-app.delete('/api/topics/:id', (req, res) => {
+app.delete('/api/plans/:planId', (req, res) => {
     const data = readData();
-    const { id } = req.params;
-    const topicIndex = data.topics.findIndex(t => t.id == id);
-    if (topicIndex > -1) {
-        const { milestoneId } = data.topics[topicIndex];
-        data.topics.splice(topicIndex, 1);
-        if (milestoneId) {
-            const milestone = data.milestones.find(m => m.id == milestoneId);
-            if (milestone) {
-                milestone.topics = milestone.topics.filter(topicId => topicId != id);
-            }
-        }
+    const planIndex = data.plans.findIndex(p => p.id == req.params.planId);
+    if (planIndex > -1) {
+        data.plans.splice(planIndex, 1);
         writeData(data);
         res.status(204).send();
     } else {
-        res.status(404).send('Topic not found');
+        res.status(404).send('Plan not found');
+    }
+});
+
+// Topics API (scoped to a plan)
+app.get('/api/plans/:planId/topics', (req, res) => {
+    const data = readData();
+    const plan = data.plans.find(p => p.id == req.params.planId);
+    if (plan) {
+        res.json(plan.topics);
+    } else {
+        res.status(404).send('Plan not found');
+    }
+});
+
+app.post('/api/plans/:planId/topics', (req, res) => {
+    const data = readData();
+    const plan = data.plans.find(p => p.id == req.params.planId);
+    if (plan) {
+        const newTopic = {
+            id: Date.now(),
+            text: req.body.text,
+            date: req.body.date,
+            color: req.body.color,
+            milestoneId: req.body.milestoneId || null
+        };
+        plan.topics.push(newTopic);
+        writeData(data);
+        res.status(201).json(newTopic);
+    } else {
+        res.status(404).send('Plan not found');
+    }
+});
+
+app.put('/api/plans/:planId/topics/:topicId', (req, res) => {
+    const data = readData();
+    const plan = data.plans.find(p => p.id == req.params.planId);
+    if (plan) {
+        const { topicId } = req.params;
+        const { text, date, color, milestoneId } = req.body;
+        const topicIndex = plan.topics.findIndex(t => t.id == topicId);
+        if (topicIndex > -1) {
+            plan.topics[topicIndex] = { ...plan.topics[topicIndex], text, date, color, milestoneId };
+            writeData(data);
+            res.json(plan.topics[topicIndex]);
+        } else {
+            res.status(404).send('Topic not found');
+        }
+    } else {
+        res.status(404).send('Plan not found');
+    }
+});
+
+app.delete('/api/plans/:planId/topics/:topicId', (req, res) => {
+    const data = readData();
+    const plan = data.plans.find(p => p.id == req.params.planId);
+    if (plan) {
+        const { topicId } = req.params;
+        const topicIndex = plan.topics.findIndex(t => t.id == topicId);
+        if (topicIndex > -1) {
+            plan.topics.splice(topicIndex, 1);
+            writeData(data);
+            res.status(204).send();
+        } else {
+            res.status(404).send('Topic not found');
+        }
+    } else {
+        res.status(404).send('Plan not found');
     }
 });
 
 // Milestones API
-app.get('/api/milestones', (req, res) => {
+// Milestones API (scoped to a plan)
+app.get('/api/plans/:planId/milestones', (req, res) => {
     const data = readData();
-    res.json(data.milestones);
-});
-
-app.post('/api/milestones', (req, res) => {
-    const data = readData();
-    const newMilestone = {
-        id: Date.now(),
-        text: req.body.text,
-        date: req.body.date,
-        topics: []
-    };
-    data.milestones.push(newMilestone);
-    writeData(data);
-    res.status(201).json(newMilestone);
-});
-
-app.put('/api/milestones/:id', (req, res) => {
-    const data = readData();
-    const { id } = req.params;
-    const { text, date } = req.body;
-    const milestoneIndex = data.milestones.findIndex(m => m.id == id);
-    if (milestoneIndex > -1) {
-        data.milestones[milestoneIndex] = { ...data.milestones[milestoneIndex], text, date };
-        writeData(data);
-        res.json(data.milestones[milestoneIndex]);
+    const plan = data.plans.find(p => p.id == req.params.planId);
+    if (plan) {
+        res.json(plan.milestones);
     } else {
-        res.status(404).send('Milestone not found');
+        res.status(404).send('Plan not found');
     }
 });
 
-app.delete('/api/milestones/:id', (req, res) => {
+app.post('/api/plans/:planId/milestones', (req, res) => {
     const data = readData();
-    const { id } = req.params;
-    const milestoneIndex = data.milestones.findIndex(m => m.id == id);
-    if (milestoneIndex > -1) {
-        const milestoneId = data.milestones[milestoneIndex].id;
-        // Unassign topics associated with the milestone
-        data.topics.forEach(topic => {
-            if (topic.milestoneId == milestoneId) {
-                topic.milestoneId = null;
-            }
-        });
-        data.milestones.splice(milestoneIndex, 1);
+    const plan = data.plans.find(p => p.id == req.params.planId);
+    if (plan) {
+        const newMilestone = {
+            id: Date.now(),
+            text: req.body.text,
+            date: req.body.date,
+            color: req.body.color
+        };
+        plan.milestones.push(newMilestone);
         writeData(data);
-        res.status(204).send();
+        res.status(201).json(newMilestone);
     } else {
-        res.status(404).send('Milestone not found');
+        res.status(404).send('Plan not found');
+    }
+});
+
+app.put('/api/plans/:planId/milestones/:milestoneId', (req, res) => {
+    const data = readData();
+    const plan = data.plans.find(p => p.id == req.params.planId);
+    if (plan) {
+        const { milestoneId } = req.params;
+        const { text, date, color } = req.body;
+        const milestoneIndex = plan.milestones.findIndex(m => m.id == milestoneId);
+        if (milestoneIndex > -1) {
+            plan.milestones[milestoneIndex] = { ...plan.milestones[milestoneIndex], text, date, color };
+            writeData(data);
+            res.json(plan.milestones[milestoneIndex]);
+        } else {
+            res.status(404).send('Milestone not found');
+        }
+    } else {
+        res.status(404).send('Plan not found');
+    }
+});
+
+app.delete('/api/plans/:planId/milestones/:milestoneId', (req, res) => {
+    const data = readData();
+    const plan = data.plans.find(p => p.id == req.params.planId);
+    if (plan) {
+        const { milestoneId } = req.params;
+        const milestoneIndex = plan.milestones.findIndex(m => m.id == milestoneId);
+        if (milestoneIndex > -1) {
+            // Unassign topics associated with the milestone
+            plan.topics.forEach(topic => {
+                if (topic.milestoneId == milestoneId) {
+                    topic.milestoneId = null;
+                }
+            });
+            plan.milestones.splice(milestoneIndex, 1);
+            writeData(data);
+            res.status(204).send();
+        } else {
+            res.status(404).send('Milestone not found');
+        }
+    } else {
+        res.status(404).send('Plan not found');
     }
 });
 

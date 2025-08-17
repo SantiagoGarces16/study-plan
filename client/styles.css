@@ -1,122 +1,150 @@
+/* Cloudscape Design System - Themed */
 :root {
-    --primary-color-light: #3498db;
-    --secondary-color-light: #2ecc71;
-    --background-color-light: #ecf0f1;
-    --text-color-light: #2c3e50;
-    --card-bg-color-light: #ffffff;
-    --border-color-light: #bdc3c7;
+    --font-family: 'Open Sans', sans-serif;
 
-    --primary-color-dark: #3498db;
-    --secondary-color-dark: #27ae60;
-    --background-color-dark: #2c3e50;
-    --text-color-dark: #ecf0f1;
-    --card-bg-color-dark: #34495e;
-    --border-color-dark: #7f8c8d;
-    
-    --shadow-color: rgba(0, 0, 0, 0.1);
-    --danger-color: #e74c3c;
-    --milestone-color: #9b59b6;
-    --topic-color: #f1c40f;
+    /* Light Theme */
+    --background-color-light: #fbfbfb;
+    --text-color-light: #000716;
+    --header-color-light: #000716;
+    --border-color-light: #d1d5db;
+    --card-bg-light: #ffffff;
+    --button-bg-light: #0972d3;
+    --button-text-light: #ffffff;
+
+    /* Dark Theme */
+    --background-color-dark: #16191f;
+    --text-color-dark: #ffffff;
+    --header-color-dark: #ffffff;
+    --border-color-dark: #414d5c;
+    --card-bg-dark: #232b33;
+    --button-bg-dark: #0a84ff;
+    --button-text-dark: #ffffff;
 }
 
 body {
+    font-family: var(--font-family);
     margin: 0;
-    font-family: 'Arial', sans-serif;
     transition: background-color 0.3s, color 0.3s;
 }
 
-.light-theme {
-    --primary-color: var(--primary-color-light);
-    --secondary-color: var(--secondary-color-light);
-    --background-color: var(--background-color-light);
-    --text-color: var(--text-color-light);
-    --card-bg-color: var(--card-bg-color-light);
-    --border-color: var(--border-color-light);
+.theme-light {
+    background-color: var(--background-color-light);
+    color: var(--text-color-light);
 }
 
-.dark-theme {
-    --primary-color: var(--primary-color-dark);
-    --secondary-color: var(--secondary-color-dark);
-    --background-color: var(--background-color-dark);
-    --text-color: var(--text-color-dark);
-    --card-bg-color: var(--card-bg-color-dark);
-    --border-color: var(--border-color-dark);
-}
-
-body {
-    background-color: var(--background-color);
-    color: var(--text-color);
+.theme-dark {
+    background-color: var(--background-color-dark);
+    color: var(--text-color-dark);
 }
 
 #app {
-    padding: 20px;
+    padding: 2rem;
 }
 
-.container {
-    max-width: 1400px;
-    margin: 0 auto;
-}
-
-header {
-    text-align: center;
+.app-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     margin-bottom: 2rem;
-    position: relative;
+}
+
+.main-menu {
+    display: flex;
+    gap: 1rem;
 }
 
 .app-title-input {
-    font-size: 2.5rem;
-    color: var(--primary-color);
+    font-size: 2rem;
+    font-weight: 700;
     border: none;
     background: transparent;
-    text-align: center;
-    width: 100%;
+    color: inherit;
 }
 
-.theme-selector {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-}
-
-.content {
+.app-content {
     display: grid;
-    grid-template-columns: 1fr 1.5fr;
-    gap: 20px;
+    grid-template-columns: 1fr 2fr;
+    gap: 2rem;
 }
 
-.card {
-    background-color: var(--card-bg-color);
-    border-radius: 8px;
-    padding: 20px;
-    box-shadow: 0 2px 4px var(--shadow-color);
+.main-menu-content {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.main-menu-content li {
+    cursor: pointer;
+    padding: 1rem;
+    transition: background-color 0.3s;
+}
+
+.main-menu-content li:hover {
+    background-color: rgba(0,0,0,0.1);
+}
+
+.milestones-section, .topics-section, .calendar-section {
+    border-radius: 4px;
+    padding: 1.5rem;
+}
+
+.theme-light .milestones-section, .theme-light .topics-section, .theme-light .calendar-section {
+    background-color: var(--card-bg-light);
+    border: 1px solid var(--border-color-light);
+}
+
+.theme-dark .milestones-section, .theme-dark .topics-section, .theme-dark .calendar-section {
+    background-color: var(--card-bg-dark);
+    border: 1px solid var(--border-color-dark);
 }
 
 h2 {
-    color: var(--primary-color);
-    border-bottom: 2px solid var(--secondary-color);
-    padding-bottom: 10px;
+    font-size: 1.5rem;
     margin-top: 0;
 }
 
 input, select, button {
-    padding: 10px;
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
+    font-family: var(--font-family);
     font-size: 1rem;
-    background-color: var(--card-bg-color);
-    color: var(--text-color);
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    margin-bottom: 1rem;
+}
+
+input[type="color"] {
+    padding: 0;
+    border: none;
+    width: 2rem;
+    height: 2rem;
+}
+
+.theme-light input, .theme-light select {
+    border: 1px solid var(--border-color-light);
+    background-color: var(--card-bg-light);
+    color: var(--text-color-light);
+}
+
+.theme-dark input, .theme-dark select {
+    border: 1px solid var(--border-color-dark);
+    background-color: var(--card-bg-dark);
+    color: var(--text-color-dark);
 }
 
 button {
-    background-color: var(--primary-color);
-    color: white;
     border: none;
     cursor: pointer;
-    transition: background-color 0.3s;
 }
 
-button:hover {
-    opacity: 0.9;
+.theme-light button {
+    background-color: var(--button-bg-light);
+    color: var(--button-text-light);
+}
+
+.theme-dark button {
+    background-color: var(--button-bg-dark);
+    color: var(--button-text-dark);
 }
 
 ul {
@@ -125,28 +153,43 @@ ul {
 }
 
 li {
-    padding: 10px;
-    border-bottom: 1px solid var(--border-color);
+    padding: 0.5rem 0;
+}
+
+.milestone, .topic {
+    border: 1px solid var(--border-color-light);
+    padding: 1rem;
+    margin-bottom: 1rem;
+    border-radius: 4px;
+}
+
+.milestone-header, .topic, .plan-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
 }
 
 .milestone-header {
     cursor: pointer;
+    font-size: 1.2rem;
     font-weight: bold;
-    color: var(--milestone-color);
 }
 
-.topic-text {
-    color: var(--topic-color);
+.item-actions, .plan-item .delete-btn {
+    visibility: hidden;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.item-container:hover .item-actions, .plan-item:hover .delete-btn {
+    visibility: visible;
+    opacity: 1;
 }
 
 .milestone-topics {
-    margin-left: 20px;
-    border-left: 2px solid var(--secondary-color);
-    padding-left: 10px;
-}
-
-.suggestions-btn {
-    background-color: var(--secondary-color);
+    margin-top: 1rem;
+    padding-left: 1rem;
+    border-left: 2px solid var(--button-bg-light);
 }
 
 .modal {
@@ -155,40 +198,35 @@ li {
     left: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(0, 0, 0, 0.6);
+    background-color: rgba(0, 0, 0, 0.7);
     display: flex;
     justify-content: center;
     align-items: center;
-    z-index: 1050; /* Ensure modals are on top */
+    z-index: 1050;
 }
 
 .modal-content {
-    background: var(--card-bg-color);
-    padding: 30px;
-    border-radius: 8px;
+    padding: 2rem;
+    border-radius: 4px;
     width: 90%;
     max-width: 500px;
     position: relative;
 }
 
-.close-btn {
+.modal-content span {
     position: absolute;
     top: 10px;
     right: 10px;
     font-size: 1.5rem;
     cursor: pointer;
+    line-height: 1;
+    padding: 5px;
 }
 
-#calendar-container {
-    margin-top: 20px;
+.theme-light .modal-content {
+    background-color: var(--card-bg-light);
 }
 
-.topic-event {
-    background-color: var(--topic-color) !important;
-    border-color: var(--topic-color) !important;
-}
-
-.milestone-event {
-    background-color: var(--milestone-color) !important;
-    border-color: var(--milestone-color) !important;
+.theme-dark .modal-content {
+    background-color: var(--card-bg-dark);
 }

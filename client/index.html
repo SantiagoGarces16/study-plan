@@ -5,102 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Career Study Plan</title>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,700&display=swap">
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div id="app">
-        <div class="container">
-            <header>
-                <input type="text" v-model="appTitle" class="app-title-input">
-                <div class="theme-selector">
-                    <button @click="setTheme('light')">Light</button>
-                    <button @click="setTheme('dark')">Dark</button>
-                </div>
-            </header>
-            <main class="content">
-                <div class="milestones-section card">
-                    <h2>Milestones</h2>
-                    <form @submit.prevent="addMilestone">
-                        <input v-model="newMilestone.text" placeholder="New milestone" required>
-                        <input v-model="newMilestone.date" type="date" required>
-                        <button type="submit">Add Milestone</button>
-                    </form>
-                    <ul id="milestones-list">
-                        <li v-for="milestone in milestones" :key="milestone.id" class="milestone">
-                            <div class="milestone-header" @click="toggleMilestone(milestone.id)">
-                                <span class="milestone-text">{{ milestone.text }} - {{ milestone.date }}</span>
-                                <div>
-                                    <button @click.stop="openEditModal('milestone', milestone)">Edit</button>
-                                    <button @click.stop="deleteItem('milestone', milestone.id)">Delete</button>
-                                </div>
-                            </div>
-                            <ul class="milestone-topics" v-if="milestone.expanded">
-                                <li v-for="topic in getTopicsForMilestone(milestone.id)" :key="topic.id" class="topic">
-                                    <span class="topic-text">{{ topic.text }} - {{ topic.date }}</span>
-                                    <div>
-                                        <button @click.stop="openEditModal('topic', topic)">Edit</button>
-                                        <button @click.stop="deleteItem('topic', topic.id)">Delete</button>
-                                    </div>
-                                </li>
-                            </ul>
-                            <button class="suggestions-btn" @click="fetchSuggestions(milestone)">Suggestions</button>
-                        </li>
-                    </ul>
-                </div>
-                <div class="main-content">
-                    <div class="topics-section card">
-                        <h2>Unassigned Topics</h2>
-                        <form @submit.prevent="addTopic">
-                            <input v-model="newTopic.text" placeholder="New topic" required>
-                            <input v-model="newTopic.date" type="date" required>
-                            <select v-model="newTopic.milestoneId">
-                                <option value="">Assign to Milestone (Optional)</option>
-                                <option v-for="milestone in milestones" :value="milestone.id">{{ milestone.text }}</option>
-                            </select>
-                            <button type="submit">Add Topic</button>
-                        </form>
-                        <ul id="topics-list">
-                            <li v-for="topic in unassignedTopics" :key="topic.id" class="topic">
-                                <span class="topic-text">{{ topic.text }} - {{ topic.date }}</span>
-                                <div>
-                                    <button @click.stop="openEditModal('topic', topic)">Edit</button>
-                                    <button @click.stop="deleteItem('topic', topic.id)">Delete</button>
-                                </div>
-                            </li>
-                        </ul>
-                    </div>
-                    <div class="calendar-section card">
-                        <h2>Calendar</h2>
-                        <div id="calendar-container"></div>
-                    </div>
-                </div>
-            </main>
-        </div>
-
-        <!-- Modals -->
-        <div v-if="showEditModal" class="modal">
-            <div class="modal-content">
-                <span class="close-btn" @click="closeModals">&times;</span>
-                <h2>Edit Item</h2>
-                <input v-model="editingItem.text">
-                <input v-model="editingItem.date" type="date">
-                <button @click="saveEdit">Save Changes</button>
-            </div>
-        </div>
-
-        <div v-if="showSuggestionsModal" class="modal">
-            <div class="modal-content">
-                <span class="close-btn" @click="closeModals">&times;</span>
-                <h2>Suggested Topics</h2>
-                <div v-if="loadingSuggestions">Loading...</div>
-                <div v-else id="suggestions-list">
-                    <label v-for="suggestion in suggestions" :key="suggestion">
-                        <input type="checkbox" :value="suggestion" v-model="selectedSuggestions"> {{ suggestion }}
-                    </label>
-                </div>
-                <button @click="addSelectedTopics" :disabled="loadingSuggestions">Add Selected Topics</button>
-            </div>
-        </div>
+    <div id="app" :class="theme">
+        <!-- App Layout will be managed by Vue components -->
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>

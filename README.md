@@ -1,21 +1,20 @@
 # Career Study Plan
 
-This is a dynamic web application for creating and managing a career study plan. It allows you to add study topics, organize them into milestones, and visualize your plan on a calendar. The application features a reactive frontend built with Vue.js and a backend powered by Node.js and Express.
+A dynamic, multi-plan web application for creating and managing career study plans. This tool allows you to organize study topics into milestones, visualize your progress on a calendar, and get AI-powered suggestions for new topics. The application features a reactive frontend built with Vue.js, a modern and user-friendly interface inspired by the Cloudscape Design System, and a backend powered by Node.js and Express.
 
 ## Features
 
--   **Vue.js Frontend:** A modern, responsive, and user-friendly interface built with the Vue.js framework.
--   **Topics Management:** Add, edit, and delete study topics.
--   **Milestones:** Group topics into milestones to structure your study plan.
+-   **Multi-Plan Management:** Create, select, and delete multiple career plans from a central main menu.
+-   **Vue.js Frontend:** A modern, responsive, and component-based interface built with the Vue.js framework.
+-   **Interactive UI:** A clean, hover-based interface for all actions, including editing and deleting items.
+-   **Topics & Milestones:** Add, edit, and delete study topics and group them into milestones.
+-   **Color Customization:** Assign custom colors to milestones and topics for better visual organization in the calendar.
 -   **Calendar View:** Visualize your topics and milestones on a calendar with color-coded events.
 -   **AI-Powered Suggestions:** Get study topic suggestions for your milestones using the Gemini API.
--   **Customizable Title:** Edit the main title of the application to personalize your study plan.
--   **Theme Selector:** Switch between light and dark themes for a comfortable viewing experience.
+-   **Customizable Title & Themes:** Edit the title of your plan and switch between light and dark themes.
 -   **Simple Data Persistence:** Data is stored in a `db.json` file on the server.
 
 ## Project Structure
-
-The project is divided into two main parts:
 
 -   `client/`: Contains the frontend files (HTML, CSS, and Vue.js).
 -   `server/`: Contains the backend server files (Node.js, Express).
@@ -42,62 +41,42 @@ The project is divided into two main parts:
 ### Prerequisites
 
 -   [Node.js](https://nodejs.org/) installed on your machine.
--   A Gemini API key. You can get one from [Google AI Studio](https://aistudio.google.com/).
+-   A Gemini API key from [Google AI Studio](https://aistudio.google.com/).
 
 ### Installation and Setup
 
 1.  **Clone the repository:**
-
     ```bash
     git clone <repository-url>
     cd career-study-plan
     ```
 
 2.  **Install backend dependencies:**
-
     ```bash
     cd server
     npm install
     ```
 
 3.  **Set up your Gemini API key:**
-
     Create a `.env` file in the `server` directory and add your API key:
-
     ```
     GEMINI_API_KEY=your_api_key_here
     ```
 
 4.  **Start the backend server:**
-
     ```bash
     npm start
     ```
-
-    The server will be running on `http://localhost:3000`.
+    The server will run on `http://localhost:3000`.
 
 5.  **Open the frontend:**
-
     Open the `client/index.html` file in your web browser.
 
 ## API Endpoints
 
-The backend provides the following API endpoints:
+The backend provides a RESTful API for managing plans, topics, and milestones. All endpoints are scoped to a specific plan.
 
-### Topics
-
--   `GET /api/topics`: Get all topics.
--   `POST /api/topics`: Create a new topic.
--   `PUT /api/topics/:id`: Update a topic.
--   `DELETE /api/topics/:id`: Delete a topic.
-
-### Milestones
-
--   `GET /api/milestones`: Get all milestones.
--   `POST /api/milestones`: Create a new milestone.
--   `PUT /api/milestones/:id`: Update a milestone.
--   `DELETE /api/milestones/:id`: Delete a milestone.
-
-### Suggestions
-
--   `POST /api/suggestions`: Get study topic suggestions for a milestone.
+-   **Plans:** `GET /api/plans`, `POST /api/plans`, `GET /api/plans/:planId`, `DELETE /api/plans/:planId`
+-   **Topics:** `GET /api/plans/:planId/topics`, `POST /api/plans/:planId/topics`, `PUT /api/plans/:planId/topics/:topicId`, `DELETE /api/plans/:planId/topics/:topicId`
+-   **Milestones:** `GET /api/plans/:planId/milestones`, `POST /api/plans/:planId/milestones`, `PUT /api/plans/:planId/milestones/:milestoneId`, `DELETE /api/plans/:planId/milestones/:milestoneId`
+-   **Suggestions:** `POST /api/suggestions`
