@@ -33,7 +33,8 @@ app.post('/api/plans', (req, res) => {
         id: Date.now(),
         name: req.body.name,
         topics: [],
-        milestones: []
+        milestones: [],
+        notes: ""
     };
     data.plans.push(newPlan);
     writeData(data);
@@ -44,6 +45,21 @@ app.get('/api/plans/:planId', (req, res) => {
     const data = readData();
     const plan = data.plans.find(p => p.id == req.params.planId);
     if (plan) {
+        res.json(plan);
+    } else {
+        res.status(404).send('Plan not found');
+    }
+});
+
+app.put('/api/plans/:planId', (req, res) => {
+    const data = readData();
+    const plan = data.plans.find(p => p.id == req.params.planId);
+    if (plan) {
+        plan.name = req.body.name;
+        if (req.body.notes !== undefined) {
+            plan.notes = req.body.notes;
+        }
+        writeData(data);
         res.json(plan);
     } else {
         res.status(404).send('Plan not found');
@@ -82,7 +98,8 @@ app.post('/api/plans/:planId/topics', (req, res) => {
             text: req.body.text,
             date: req.body.date,
             color: req.body.color,
-            milestoneId: req.body.milestoneId || null
+            milestoneId: req.body.milestoneId || null,
+            completed: false // Add completed status
         };
         plan.topics.push(newTopic);
         writeData(data);
@@ -97,10 +114,10 @@ app.put('/api/plans/:planId/topics/:topicId', (req, res) => {
     const plan = data.plans.find(p => p.id == req.params.planId);
     if (plan) {
         const { topicId } = req.params;
-        const { text, date, color, milestoneId } = req.body;
+        const { text, date, color, milestoneId, completed } = req.body; // Include completed
         const topicIndex = plan.topics.findIndex(t => t.id == topicId);
         if (topicIndex > -1) {
-            plan.topics[topicIndex] = { ...plan.topics[topicIndex], text, date, color, milestoneId };
+            plan.topics[topicIndex] = { ...plan.topics[topicIndex], text, date, color, milestoneId, completed };
             writeData(data);
             res.json(plan.topics[topicIndex]);
         } else {

@@ -63,16 +63,72 @@ body {
 
 .app-content {
     display: grid;
-    grid-template-columns: 1fr 2fr;
+    grid-template-columns: 1.5fr 1fr 3fr;
+    gap: 2rem;
+}
+
+.calendar-section {
+    grid-column: 3;
+}
+
+.right-sidebar {
+    grid-column: 4;
+    display: flex;
+    flex-direction: column;
     gap: 2rem;
 }
 
 .main-menu-content {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
+    display: flex;
+    flex-direction: column;
     gap: 2rem;
     max-width: 800px;
     margin: 0 auto;
+}
+
+.full-width {
+    width: 100%;
+}
+
+.create-plan-form {
+    display: flex;
+    gap: 1rem;
+}
+
+.plan-list {
+    list-style: none;
+    padding: 0;
+}
+
+.plan-item-container {
+    border: 1px solid var(--border-color-light);
+    border-radius: 4px;
+    margin-bottom: 1rem;
+    padding: 1rem;
+    cursor: pointer;
+}
+
+.plan-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+}
+
+.plan-details {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color-light);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+
+.plan-actions {
+    margin-top: 1rem;
+    display: flex;
+    gap: 1rem;
 }
 
 .main-menu-content li {
@@ -169,6 +225,22 @@ li {
     align-items: center;
 }
 
+.plan-item {
+    gap: 1rem;
+}
+
+.plan-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 4px;
+}
+
+.plan-info {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+}
+
 .milestone-header {
     cursor: pointer;
     font-size: 1.2rem;
@@ -179,6 +251,43 @@ li {
     visibility: hidden;
     opacity: 0;
     transition: opacity 0.3s;
+}
+
+.progress-bar-container {
+    background-color: #e0e0e0;
+    border-radius: 4px;
+    height: 10px;
+    margin-top: 0.5rem;
+}
+
+.progress-bar {
+    display: flex;
+    height: 100%;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.progress-bar-segment {
+    height: 100%;
+    transition: width 0.5s ease-in-out;
+}
+
+.completed {
+    text-decoration: line-through;
+    color: #888;
+}
+
+.completed-event {
+    opacity: 0.6;
+}
+
+.sortable-ghost {
+    opacity: 0.4;
+    background: #f0f0f0;
+}
+
+.milestone.sortable-ghost {
+    background: #e0e0e0;
 }
 
 .item-container:hover .item-actions, .plan-item:hover .delete-btn {
@@ -213,6 +322,17 @@ li {
     position: relative;
 }
 
+.form-group {
+    margin-bottom: 1rem;
+    display: flex;
+    flex-direction: column;
+}
+
+.form-group label {
+    margin-bottom: 0.5rem;
+    font-weight: bold;
+}
+
 .modal-content span {
     position: absolute;
     top: 10px;
@@ -229,4 +349,66 @@ li {
 
 .theme-dark .modal-content {
     background-color: var(--card-bg-dark);
+}
+.right-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.progress-circle-section, .notepad-section {
+    border-radius: 4px;
+    padding: 1.5rem;
+}
+
+.theme-light .progress-circle-section, .theme-light .notepad-section {
+    background-color: var(--card-bg-light);
+    border: 1px solid var(--border-color-light);
+}
+
+.theme-dark .progress-circle-section, .theme-dark .notepad-section {
+    background-color: var(--card-bg-dark);
+    border: 1px solid var(--border-color-dark);
+}
+
+.progress-circle {
+    position: relative;
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 1rem auto;
+}
+
+.progress-ring__circle-bg {
+    stroke: #e6e6e6;
+}
+
+.theme-dark .progress-ring__circle-bg {
+    stroke: #333;
+}
+
+.progress-ring__circle {
+    stroke: var(--button-bg-light);
+    transition: stroke-dashoffset 0.35s;
+    transform: rotate(-90deg);
+    transform-origin: 50% 50%;
+}
+
+.theme-dark .progress-ring__circle {
+    stroke: var(--button-bg-dark);
+}
+
+.progress-text {
+    position: absolute;
+    font-size: 1.5rem;
+    font-weight: bold;
+}
+
+.notes-textarea {
+    width: 100%;
+    height: 200px;
+    resize: none;
 }
