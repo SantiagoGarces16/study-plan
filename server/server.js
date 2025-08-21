@@ -55,7 +55,7 @@ app.put('/api/plans/:planId', (req, res) => {
     const data = readData();
     const plan = data.plans.find(p => p.id == req.params.planId);
     if (plan) {
-        plan.name = req.body.name;
+        plan.name = req.body.name || plan.name;
         if (req.body.notes !== undefined) {
             plan.notes = req.body.notes;
         }

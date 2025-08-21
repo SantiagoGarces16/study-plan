@@ -1,55 +1,8 @@
 {
   "plans": [
     {
-      "id": 1755490983320,
+      "id": 1755798492809,
       "name": "IT Plan",
-      "topics": [
-        {
-          "id": 1755491030470,
-          "text": "learn rust",
-          "date": "2025-08-27",
-          "color": "#f1c40f",
-          "milestoneId": 1755491020754,
-          "completed": false,
-          "notes": ""
-        },
-        {
-          "id": 1755491203266,
-          "text": "Responsive Design",
-          "date": "2025-08-29",
-          "color": "#9b59b6",
-          "milestoneId": 1755490998623,
-          "completed": true,
-          "notes": ""
-        },
-        {
-          "id": 1755491203278,
-          "text": "JavaScript",
-          "date": "2025-08-29",
-          "color": "#9b59b6",
-          "milestoneId": 1755490998623,
-          "completed": false,
-          "notes": ""
-        }
-      ],
-      "milestones": [
-        {
-          "id": 1755490998623,
-          "text": "Create a website",
-          "date": "2025-08-29",
-          "color": "#9b59b6"
-        },
-        {
-          "id": 1755491020754,
-          "text": "get a certificate",
-          "date": "2025-09-05",
-          "color": "#9b59b6"
-        }
-      ]
-    },
-    {
-      "id": 1755542865680,
-      "name": "plan",
       "topics": [],
       "milestones": [],
       "notes": ""

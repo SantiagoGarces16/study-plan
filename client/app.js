@@ -4,12 +4,41 @@ const app = createApp({
     template: `
         <div class="app-layout">
             <div v-if="loading">Loading...</div>
-            <div v-if="!loading && currentView === 'mainMenu'">
+            <div v-if="!loading && !isAuthenticated">
+                <div class="login-container">
+                    <h1>{{ isRegistering ? 'Register for Career Study Plan' : 'Login to Career Study Plan' }}</h1>
+                    <form @submit.prevent="isRegistering ? register() : login()">
+                        <div class="form-group">
+                            <label>Username:</label>
+                            <input v-model="loginCredentials.username" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Password:</label>
+                            <input v-model="loginCredentials.password" type="password" required>
+                        </div>
+                        <button type="submit">{{ isRegistering ? 'Register' : 'Login' }}</button>
+                    </form>
+                    <button @click="isRegistering = !isRegistering" class="toggle-mode-btn">
+                        {{ isRegistering ? 'Already have an account? Login' : 'Need an account? Register' }}
+                    </button>
+                    <div v-if="loginError" class="error-message">{{ loginError }}</div>
+                </div>
+            </div>
+            <div v-if="!loading && isAuthenticated && currentView === 'mainMenu'">
                 <header class="app-header">
                     <h1>Select a Career Plan</h1>
-                    <div class="theme-selector">
-                        <button @click="setTheme('theme-light')">Light</button>
-                        <button @click="setTheme('theme-dark')">Dark</button>
+                    <div class="header-controls">
+                        <div class="user-profile" v-if="isAuthenticated">
+                            <div class="profile-dropdown-container">
+                                <button @click="toggleProfileDropdown" class="profile-button">
+                                    <img :src="currentUser.profilePicture || defaultProfilePicture" alt="User Profile" class="profile-picture">
+                                </button>
+                                <div v-if="showProfileDropdown" class="profile-dropdown">
+                                    <button @click="openSettings">Settings</button>
+                                    <button @click="logout">Log Out</button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </header>
                 <main class="main-menu-content">
@@ -45,11 +74,20 @@ const app = createApp({
             <div v-if="currentView === 'planView' && selectedPlan">
                 <header class="app-header">
                     <button @click="goToMainMenu">&larr; Back to Main Menu</button>
-                    <h1 v-if="!editingPlanName" @click="startEditingPlanName">{{ selectedPlan.name }}</h1>
-                    <input v-if="editingPlanName" type="text" v-model="planName" @blur="updatePlanName" @keyup.enter="updatePlanName" ref="planNameInput">
-                    <div class="theme-selector">
-                        <button @click="setTheme('theme-light')">Light</button>
-                        <button @click="setTheme('theme-dark')">Dark</button>
+                    <h1 v-if="!editingPlanName" @click="startEditingPlanName" class="plan-title">{{ selectedPlan.name }}</h1>
+                    <input v-if="editingPlanName" type="text" v-model="planName" @blur="updatePlanName" @keyup.enter="updatePlanName" ref="planNameInput" class="plan-title-input">
+                    <div class="header-controls">
+                        <div class="user-profile" v-if="isAuthenticated">
+                            <div class="profile-dropdown-container">
+                                <button @click="toggleProfileDropdown" class="profile-button">
+                                    <img :src="currentUser.profilePicture || defaultProfilePicture" alt="User Profile" class="profile-picture">
+                                </button>
+                                <div v-if="showProfileDropdown" class="profile-dropdown">
+                                    <button @click="openSettings">Settings</button>
+                                    <button @click="logout">Log Out</button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </header>
                 <main class="app-content">
@@ -120,6 +158,44 @@ const app = createApp({
                         <div class="progress-circle-section">
                             <h2>Overall Progress</h2>
                             <progress-circle :segments="overallProgressSegments"></progress-circle>
+                        </div>
+                        <div class="upcoming-deadlines-section">
+                            <h2>Topics</h2>
+                            <div class="topics-tabs">
+                                <button @click="setActiveTab('upcoming')" :class="{ active: activeTab === 'upcoming' }">Upcoming</button>
+                                <button @click="setActiveTab('completed')" :class="{ active: activeTab === 'completed' }">Completed</button>
+                            </div>
+                            <div v-if="activeTab === 'upcoming'">
+                                <ul v-if="upcomingDeadlines.length > 0" class="topics-list">
+                                    <li v-for="item in upcomingDeadlines" :key="item.id" :style="{ borderLeft: '4px solid ' + item.color }" class="topic-item">
+                                        <div class="topic-content">
+                                            <strong>{{ item.name }}</strong> - {{ item.dueDate }}
+                                            <br>
+                                            <small>{{ item.plan }} / {{ item.milestone }}</small>
+                                        </div>
+                                        <button v-if="item.type === 'topic'" @click="markTopicCompleted(item.id)" class="checkmark-btn">✓</button>
+                                    </li>
+                                </ul>
+                                <div v-else>
+                                    <p>No upcoming topics.</p>
+                                    <button @click="openAddTopicModal" class="add-topic-btn">Add New Topic</button>
+                                </div>
+                            </div>
+                            <div v-if="activeTab === 'completed'">
+                                <ul v-if="completedTopics.length > 0" class="topics-list">
+                                    <li v-for="item in completedTopics" :key="item.id" :style="{ borderLeft: '4px solid ' + item.color }" class="topic-item completed">
+                                        <div class="topic-content">
+                                            <strong>{{ item.name }}</strong> - {{ item.dueDate }}
+                                            <br>
+                                            <small>{{ item.plan }} / {{ item.milestone }}</small>
+                                        </div>
+                                        <button v-if="item.type === 'topic'" @click="markTopicCompleted(item.id)" class="checkmark-btn">↺</button>
+                                    </li>
+                                </ul>
+                                <div v-else>
+                                    <p>No completed topics yet.</p>
+                                </div>
+                            </div>
                         </div>
                         <div class="notepad-section">
                             <h2>Notepad</h2>
@@ -192,16 +268,93 @@ const app = createApp({
             </div>
 
         </div>
+
+                    <div v-if="showAddTopicModal" class="modal">
+                        <div class="modal-content">
+                            <span class="close-btn" @click="closeModals">&times;</span>
+                            <h2>Add Topic</h2>
+                            <div class="form-group">
+                                <label>Text:</label>
+                                <input v-model="newTopic.text">
+                            </div>
+                            <div class="form-group">
+                                <label>Date:</label>
+                                <input v-model="newTopic.date" type="date">
+                            </div>
+                            <div class="form-group">
+                                <label>Color:</label>
+                                <input v-model="newTopic.color" type="color">
+                            </div>
+                            <div class="form-group">
+                                <label>Milestone:</label>
+                                <select v-model="newTopic.milestoneId">
+                                    <option value="">None</option>
+                                    <option v-for="milestone in selectedPlan.milestones" :value="milestone.id">{{ milestone.text }}</option>
+                                </select>
+                            </div>
+                            <button @click="addTopicFromModal">Add Topic</button>
+                        </div>
+                    </div>
+        
+                    <div v-if="showSettingsModal" class="modal">
+                        <div class="modal-content">
+                            <span class="close-btn" @click="closeModals">&times;</span>
+                            <h2>Settings</h2>
+                            <div class="form-group">
+                                <label>Username:</label>
+                                <input v-model="settingsData.username" :placeholder="currentUser.username">
+                            </div>
+                            <div class="form-group">
+                                <label>New Password:</label>
+                                <input v-model="settingsData.newPassword" type="password" placeholder="Enter new password">
+                            </div>
+                            <div class="form-group">
+                                <label>Confirm New Password:</label>
+                                <input v-model="settingsData.confirmPassword" type="password" placeholder="Confirm new password">
+                            </div>
+                            <div class="form-group">
+                                <label>Theme:</label>
+                                <select v-model="settingsData.theme">
+                                    <option value="theme-light">Light</option>
+                                    <option value="theme-dark">Dark</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Profile Picture:</label>
+                                <div class="profile-picture-preview">
+                                    <img :src="currentUser.profilePicture || defaultProfilePicture" alt="Current Profile Picture" class="profile-picture-large">
+                                </div>
+                                <input type="file" @change="handleProfilePictureChange" accept="image/*" class="file-input">
+                                <button @click="resetProfilePicture" class="reset-btn">Reset to Default</button>
+                            </div>
+                            <button @click="saveSettings">Save Settings</button>
+                            <button @click="deleteUser" class="delete-user-btn">Delete Account</button>
+                            <div v-if="settingsError" class="error-message">{{ settingsError }}</div>
+                        </div>
+                    </div>
     `,
     setup() {
         const currentView = ref('mainMenu');
         const theme = ref('theme-light');
         const plans = ref([]);
         const selectedPlan = ref(null);
+        const user = ref({ profilePicture: '' });
+        const isAuthenticated = ref(false);
+        const currentUser = ref(null);
+        const loginCredentials = ref({ username: '', password: '' });
+        const loginError = ref('');
+        const showProfileDropdown = ref(false);
+        const showSettingsModal = ref(false);
+        const defaultProfilePicture = ref('./Assets/Default profile picture.jpg');
+        const isRegistering = ref(false);
+        const registeredUsers = ref(JSON.parse(localStorage.getItem('registeredUsers') || '[]'));
+        const settingsData = ref({ username: '', newPassword: '', confirmPassword: '', theme: 'theme-light' });
+        const settingsError = ref('');
         const newPlanName = ref('');
         const newTopic = ref({ text: '', date: '', color: '#f1c40f', milestoneId: '' });
         const newMilestone = ref({ text: '', date: '', color: '#9b59b6' });
         const showEditTopicModal = ref(false);
+        const showAddTopicModal = ref(false);
         const showEditMilestoneModal = ref(false);
         const showSuggestionsModal = ref(false);
         const editingItem = ref({});
@@ -215,8 +368,9 @@ const app = createApp({
         const loadingSuggestions = ref(false);
         const calendar = ref(null);
         let calendarInstance = null;
-       const loading = ref(true);
-       const expandedPlanId = ref(null);
+        const loading = ref(true);
+        const expandedPlanId = ref(null);
+        const activeTab = ref('upcoming');
 
         const overallProgressSegments = computed(() => {
             if (!selectedPlan.value || !selectedPlan.value.topics || selectedPlan.value.topics.length === 0) {
@@ -245,14 +399,112 @@ const app = createApp({
             return selectedPlan.value.topics.filter(t => !t.milestoneId);
         });
 
+        const authState = computed(() => ({
+            isAuthenticated: isAuthenticated.value,
+            currentUser: currentUser.value,
+            isLoading: loading.value
+        }));
+
+        const upcomingDeadlines = computed(() => {
+            if (!selectedPlan.value) return [];
+            const deadlines = [];
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const sevenDaysFromNow = new Date(today);
+            sevenDaysFromNow.setDate(today.getDate() + 7);
+
+            if (selectedPlan.value.milestones) {
+                selectedPlan.value.milestones.forEach(m => {
+                    const dueDate = new Date(m.date);
+                    if (dueDate >= today && dueDate <= sevenDaysFromNow) {
+                        deadlines.push({
+                            id: `m-${m.id}`,
+                            name: m.text,
+                            dueDate: m.date,
+                            plan: selectedPlan.value.name,
+                            milestone: m.text,
+                            type: 'milestone',
+                            color: m.color
+                        });
+                    }
+                });
+            }
+
+            if (selectedPlan.value.topics) {
+                selectedPlan.value.topics.filter(t => !t.completed).forEach(t => {
+                    const dueDate = new Date(t.date);
+                    if (dueDate >= today && dueDate <= sevenDaysFromNow) {
+                        const milestone = selectedPlan.value.milestones.find(m => m.id == t.milestoneId);
+                        deadlines.push({
+                            id: `t-${t.id}`,
+                            name: t.text,
+                            dueDate: t.date,
+                            plan: selectedPlan.value.name,
+                            milestone: milestone ? milestone.text : 'Unassigned',
+                            type: 'topic',
+                            color: t.color,
+                            completed: t.completed,
+                            milestoneId: t.milestoneId
+                        });
+                    }
+                });
+            }
+
+            return deadlines.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+        });
+
+        const completedTopics = computed(() => {
+            if (!selectedPlan.value) return [];
+            const completed = [];
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            if (selectedPlan.value.topics) {
+                selectedPlan.value.topics.filter(t => t.completed).forEach(t => {
+                    const dueDate = new Date(t.date);
+                    const milestone = selectedPlan.value.milestones.find(m => m.id == t.milestoneId);
+                    completed.push({
+                        id: `t-${t.id}`,
+                        name: t.text,
+                        dueDate: t.date,
+                        plan: selectedPlan.value.name,
+                        milestone: milestone ? milestone.text : 'Unassigned',
+                        type: 'topic',
+                        color: t.color,
+                        completed: t.completed,
+                        milestoneId: t.milestoneId
+                    });
+                });
+            }
+
+            return completed.sort((a, b) => new Date(b.dueDate) - new Date(a.dueDate));
+        });
+
         const fetchPlans = async () => {
             try {
                 const res = await fetch('http://localhost:3000/api/plans');
-                plans.value = await res.json();
+                const allPlans = await res.json();
+
+                // Handle legacy plans (without userId) by assigning them to current user
+                const legacyPlans = allPlans.filter(plan => !plan.userId);
+                if (legacyPlans.length > 0) {
+                    // Assign all legacy plans to current user
+                    for (const plan of legacyPlans) {
+                        plan.userId = currentUser.value.username;
+                        await fetch(`http://localhost:3000/api/plans/${plan.id}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ userId: currentUser.value.username })
+                        });
+                    }
+                }
+
+                // Always filter to show only current user's plans
+                plans.value = allPlans.filter(plan => plan.userId === currentUser.value.username);
             } catch (error) {
                 console.error('Error fetching plans:', error);
             } finally {
-               loading.value = false;
+                loading.value = false;
             }
         };
 
@@ -263,7 +515,7 @@ const app = createApp({
                 try {
                     const res = await fetch(`http://localhost:3000/api/plans/${planId}`);
                     const plan = await res.json();
-                    
+
                     const topicCount = plan.topics ? plan.topics.length : 0;
                     const milestoneCount = plan.milestones ? plan.milestones.length : 0;
                     const completedTopics = plan.topics ? plan.topics.filter(t => t.completed) : [];
@@ -286,7 +538,7 @@ const app = createApp({
                     if (index !== -1) {
                         plans.value[index] = { ...plans.value[index], ...plan };
                     }
-                    
+
                     expandedPlanId.value = planId;
                 } catch (error) {
                     console.error('Error fetching plan details:', error);
@@ -313,7 +565,11 @@ const app = createApp({
                 const res = await fetch('http://localhost:3000/api/plans', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name: newPlanName.value, lastEdited: new Date().toISOString() })
+                    body: JSON.stringify({
+                        name: newPlanName.value,
+                        userId: currentUser.value.username,
+                        lastEdited: new Date().toISOString()
+                    })
                 });
                 const newPlan = await res.json();
                 newPlanName.value = '';
@@ -333,7 +589,7 @@ const app = createApp({
             }
         };
 
-        
+
         const startEditingPlanName = async () => {
             editingPlanName.value = true;
             await nextTick();
@@ -349,7 +605,11 @@ const app = createApp({
             await fetch(`http://localhost:3000/api/plans/${selectedPlan.value.id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: selectedPlan.value.name, lastEdited: new Date().toISOString() })
+                body: JSON.stringify({
+                    name: selectedPlan.value.name,
+                    userId: currentUser.value.username,
+                    lastEdited: new Date().toISOString()
+                })
             });
             editingPlanName.value = false;
         };
@@ -359,10 +619,14 @@ const app = createApp({
             await fetch(`http://localhost:3000/api/plans/${selectedPlan.value.id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ notes: selectedPlan.value.notes, lastEdited: new Date().toISOString() })
+                body: JSON.stringify({
+                    notes: selectedPlan.value.notes,
+                    userId: currentUser.value.username,
+                    lastEdited: new Date().toISOString()
+                })
             });
         };
-        
+
         const goToMainMenu = () => {
             currentView.value = 'mainMenu';
             selectedPlan.value = null;
@@ -415,11 +679,12 @@ const app = createApp({
                 await fetch(`http://localhost:3000/api/plans/${selectedPlan.value.id}/topics`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ ...topicData, lastEdited: new Date().toISOString() })
+                    body: JSON.stringify({ ...topicData, userId: currentUser.value.username, lastEdited: new Date().toISOString() })
                 });
                 newTopic.value = { text: '', date: '', color: '#f1c40f', milestoneId: '' };
                 const res = await fetch(`http://localhost:3000/api/plans/${selectedPlan.value.id}`);
                 selectedPlan.value = await res.json();
+                initializeCalendar();
             }
         };
 
@@ -428,21 +693,23 @@ const app = createApp({
                 await fetch(`http://localhost:3000/api/plans/${selectedPlan.value.id}/milestones`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ ...newMilestone.value, lastEdited: new Date().toISOString() })
+                    body: JSON.stringify({ ...newMilestone.value, userId: currentUser.value.username, lastEdited: new Date().toISOString() })
                 });
                 newMilestone.value = { text: '', date: '', color: '#9b59b6' };
                 const res = await fetch(`http://localhost:3000/api/plans/${selectedPlan.value.id}`);
                 selectedPlan.value = await res.json();
+                initializeCalendar();
             }
         };
 
         const deleteItem = async (type, id) => {
-            const url = type === 'topic' 
-                ? `http://localhost:3000/api/plans/${selectedPlan.value.id}/topics/${id}` 
+            const url = type === 'topic'
+                ? `http://localhost:3000/api/plans/${selectedPlan.value.id}/topics/${id}`
                 : `http://localhost:3000/api/plans/${selectedPlan.value.id}/milestones/${id}`;
             await fetch(url, { method: 'DELETE' });
             const res = await fetch(`http://localhost:3000/api/plans/${selectedPlan.value.id}`);
             selectedPlan.value = await res.json();
+            initializeCalendar();
         };
 
         const openEditModal = (type, item) => {
@@ -458,25 +725,26 @@ const app = createApp({
         const saveEdit = async () => {
             const { id } = editingItem.value;
             const isTopic = editingType.value === 'topic';
-            const url = isTopic 
-                ? `http://localhost:3000/api/plans/${selectedPlan.value.id}/topics/${id}` 
+            const url = isTopic
+                ? `http://localhost:3000/api/plans/${selectedPlan.value.id}/topics/${id}`
                 : `http://localhost:3000/api/plans/${selectedPlan.value.id}/milestones/${id}`;
-            
-            const body = { 
-                text: editingItem.value.text, 
-                date: editingItem.value.date, 
-                color: editingItem.value.color 
-            };
-            if (isTopic) {
-                body.milestoneId = editingItem.value.milestoneId;
-                body.completed = editingItem.value.completed;
-            }
 
-            await fetch(url, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ...body, lastEdited: new Date().toISOString() })
-            });
+            const body = {
+                 text: editingItem.value.text,
+                 date: editingItem.value.date,
+                 color: editingItem.value.color,
+                 userId: currentUser.value.username
+             };
+             if (isTopic) {
+                 body.milestoneId = editingItem.value.milestoneId;
+                 body.completed = editingItem.value.completed;
+             }
+
+             await fetch(url, {
+                 method: 'PUT',
+                 headers: { 'Content-Type': 'application/json' },
+                 body: JSON.stringify({ ...body, lastEdited: new Date().toISOString() })
+             });
             closeModals();
             const res = await fetch(`http://localhost:3000/api/plans/${selectedPlan.value.id}`);
             selectedPlan.value = await res.json();
@@ -510,7 +778,7 @@ const app = createApp({
                 const fetchedSuggestions = await res.json();
                 const milestoneTopics = getTopicsForMilestone(milestone.id).map(t => t.text.toLowerCase());
                 const filteredSuggestions = fetchedSuggestions.filter(s => !milestoneTopics.includes(s.toLowerCase()));
-                
+
                 if (filteredSuggestions.length === 0) {
                     suggestions.value = ["No new suggestions found."];
                 } else {
@@ -530,12 +798,13 @@ const app = createApp({
                 await fetch(`http://localhost:3000/api/plans/${selectedPlan.value.id}/topics`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        text: topicText, 
-                        date: currentMilestone.value.date, 
+                    body: JSON.stringify({
+                        text: topicText,
+                        date: currentMilestone.value.date,
                         milestoneId: currentMilestone.value.id,
                         color: currentMilestone.value.color,
-                        completed: false
+                        completed: false,
+                        userId: currentUser.value.username
                     })
                 });
             }
@@ -548,10 +817,21 @@ const app = createApp({
             showEditTopicModal.value = false;
             showEditMilestoneModal.value = false;
             showSuggestionsModal.value = false;
+            showAddTopicModal.value = false;
+            showSettingsModal.value = false;
             editingItem.value = {};
             suggestions.value = [];
             selectedSuggestions.value = [];
             currentMilestone.value = null;
+        };
+
+        const openAddTopicModal = () => {
+            showAddTopicModal.value = true;
+        };
+
+        const addTopicFromModal = async () => {
+            await addTopic();
+            closeModals();
         };
 
         const initializeCalendar = () => {
@@ -560,13 +840,18 @@ const app = createApp({
                 ...selectedPlan.value.topics.map(t => ({ title: t.text, start: t.date, allDay: true, backgroundColor: t.color, borderColor: t.color, classNames: [t.completed ? 'completed-event' : ''] })),
                 ...selectedPlan.value.milestones.map(m => ({ title: m.text, start: m.date, allDay: true, backgroundColor: m.color, borderColor: m.color }))
             ];
-            
+
             if (calendarInstance) {
                 calendarInstance.destroy();
             }
             calendarInstance = new FullCalendar.Calendar(calendar.value, {
                 initialView: 'dayGridMonth',
-                events: events
+                events: events,
+                eventDidMount: function (info) {
+                    if (info.event.extendedProps.status === 'completed') {
+                        info.el.style.opacity = '0.5';
+                    }
+                }
             });
             calendarInstance.render();
         };
@@ -576,9 +861,244 @@ const app = createApp({
             document.body.className = newTheme;
         };
 
+        const register = async () => {
+            if (loginCredentials.value.username && loginCredentials.value.password) {
+                // Check if user already exists
+                const existingUser = registeredUsers.value.find(u => u.username === loginCredentials.value.username);
+                if (existingUser) {
+                    loginError.value = 'Username already exists';
+                    return;
+                }
+
+                // Add new user
+                const newUser = {
+                    username: loginCredentials.value.username,
+                    password: loginCredentials.value.password,
+                    profilePicture: defaultProfilePicture.value
+                };
+                registeredUsers.value.push(newUser);
+                localStorage.setItem('registeredUsers', JSON.stringify(registeredUsers.value));
+
+                // Auto login after registration
+                isAuthenticated.value = true;
+                currentUser.value = {
+                    username: newUser.username,
+                    profilePicture: newUser.profilePicture
+                };
+                localStorage.setItem('isAuthenticated', 'true');
+                localStorage.setItem('currentUser', JSON.stringify(currentUser.value));
+                loginCredentials.value = { username: '', password: '' };
+                loginError.value = '';
+                isRegistering.value = false;
+                fetchPlans();
+            } else {
+                loginError.value = 'Please enter both username and password';
+            }
+        };
+
+        const login = async () => {
+            // Check against registered users
+            if (loginCredentials.value.username && loginCredentials.value.password) {
+                const user = registeredUsers.value.find(u =>
+                    u.username === loginCredentials.value.username && u.password === loginCredentials.value.password
+                );
+
+                if (user) {
+                    isAuthenticated.value = true;
+                    // Ensure user has all required properties
+                    currentUser.value = {
+                        username: user.username,
+                        profilePicture: user.profilePicture || defaultProfilePicture.value
+                    };
+                    localStorage.setItem('isAuthenticated', 'true');
+                    localStorage.setItem('currentUser', JSON.stringify(currentUser.value));
+                    loginCredentials.value = { username: '', password: '' };
+                    loginError.value = '';
+                    fetchPlans();
+                } else {
+                    loginError.value = 'Invalid username or password';
+                }
+            } else {
+                loginError.value = 'Please enter both username and password';
+            }
+        };
+
+        const logout = () => {
+            isAuthenticated.value = false;
+            currentUser.value = null;
+            localStorage.removeItem('isAuthenticated');
+            localStorage.removeItem('currentUser');
+            currentView.value = 'mainMenu';
+            selectedPlan.value = null;
+            plans.value = [];
+        };
+
+        const toggleProfileDropdown = () => {
+            showProfileDropdown.value = !showProfileDropdown.value;
+        };
+
+        const closeProfileDropdown = () => {
+            showProfileDropdown.value = false;
+        };
+
+        const deleteUser = () => {
+            if (confirm('Are you sure you want to delete your account? This action cannot be undone and will remove all your data.')) {
+                // Remove user from registeredUsers
+                const userIndex = registeredUsers.value.findIndex(u => u.username === currentUser.value.username);
+                if (userIndex !== -1) {
+                    registeredUsers.value.splice(userIndex, 1);
+                    localStorage.setItem('registeredUsers', JSON.stringify(registeredUsers.value));
+                }
+
+                // Clear authentication
+                isAuthenticated.value = false;
+                currentUser.value = null;
+                localStorage.removeItem('isAuthenticated');
+                localStorage.removeItem('currentUser');
+
+                // Reset app state
+                plans.value = [];
+                selectedPlan.value = null;
+                showProfileDropdown.value = false;
+
+                alert('Your account has been deleted successfully.');
+            }
+        };
+
+        const openSettings = () => {
+            showProfileDropdown.value = false;
+            showSettingsModal.value = true;
+        };
+
+        const makeAuthenticatedRequest = async (url, options = {}) => {
+            if (!isAuthenticated.value) {
+                throw new Error('User not authenticated');
+            }
+
+            // In a real app, you would add auth headers here
+            // For now, we'll just check authentication status
+            const defaultOptions = {
+                headers: {
+                    'Content-Type': 'application/json',
+                    // Add auth token here if available
+                    // 'Authorization': `Bearer ${authToken.value}`
+                },
+                ...options
+            };
+
+            return fetch(url, defaultOptions);
+        };
+
+        const handleProfilePictureChange = (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    currentUser.value.profilePicture = e.target.result;
+                    localStorage.setItem('currentUser', JSON.stringify(currentUser.value));
+                };
+                reader.readAsDataURL(file);
+            }
+        };
+
+        const resetProfilePicture = () => {
+            currentUser.value.profilePicture = defaultProfilePicture.value;
+            localStorage.setItem('currentUser', JSON.stringify(currentUser.value));
+        };
+
+        const setActiveTab = (tab) => {
+            activeTab.value = tab;
+        };
+
+        const markTopicCompleted = async (topicId) => {
+            const actualTopicId = topicId.replace('t-', '');
+            const topicToUpdate = selectedPlan.value.topics.find(t => t.id == actualTopicId);
+            if (topicToUpdate) {
+                topicToUpdate.completed = !topicToUpdate.completed;
+                await fetch(`http://localhost:3000/api/plans/${selectedPlan.value.id}/topics/${actualTopicId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ...topicToUpdate, userId: currentUser.value.username, lastEdited: new Date().toISOString() })
+                });
+                // Update the calendar to reflect the changes
+                initializeCalendar();
+            }
+        };
+
+        const saveSettings = () => {
+            settingsError.value = '';
+
+            // Validate passwords match if provided
+            if (settingsData.value.newPassword && settingsData.value.newPassword !== settingsData.value.confirmPassword) {
+                settingsError.value = 'Passwords do not match';
+                return;
+            }
+
+            // Update username if provided
+            if (settingsData.value.username && settingsData.value.username !== currentUser.value.username) {
+                // Check if username already exists
+                const existingUser = registeredUsers.value.find(u => u.username === settingsData.value.username && u.username !== currentUser.value.username);
+                if (existingUser) {
+                    settingsError.value = 'Username already exists';
+                    return;
+                }
+
+                // Update in registered users
+                const userIndex = registeredUsers.value.findIndex(u => u.username === currentUser.value.username);
+                if (userIndex !== -1) {
+                    registeredUsers.value[userIndex].username = settingsData.value.username;
+                }
+
+                currentUser.value.username = settingsData.value.username;
+            }
+
+            // Update password if provided
+            if (settingsData.value.newPassword) {
+                const userIndex = registeredUsers.value.findIndex(u => u.username === currentUser.value.username);
+                if (userIndex !== -1) {
+                    registeredUsers.value[userIndex].password = settingsData.value.newPassword;
+                }
+            }
+
+            // Update theme
+            setTheme(settingsData.value.theme);
+
+            // Save changes
+            localStorage.setItem('registeredUsers', JSON.stringify(registeredUsers.value));
+            localStorage.setItem('currentUser', JSON.stringify(currentUser.value));
+
+            // Reset form
+            settingsData.value = { username: '', newPassword: '', confirmPassword: '', theme: settingsData.value.theme };
+            closeModals();
+        };
+
+        const checkAuthStatus = () => {
+            const authStatus = localStorage.getItem('isAuthenticated');
+            if (authStatus === 'true') {
+                isAuthenticated.value = true;
+                const userData = localStorage.getItem('currentUser');
+                if (userData) {
+                    currentUser.value = JSON.parse(userData);
+                }
+            }
+        };
+
         onMounted(() => {
-            fetchPlans();
+            checkAuthStatus();
+            if (isAuthenticated.value) {
+                fetchPlans();
+            } else {
+                loading.value = false; // Allow login form to show if not authenticated
+            }
             setTheme(theme.value);
+
+            // Add click outside listener for profile dropdown
+            document.addEventListener('click', (event) => {
+                const profileContainer = document.querySelector('.profile-dropdown-container');
+                if (profileContainer && !profileContainer.contains(event.target)) {
+                    closeProfileDropdown();
+                }
+            });
         });
 
         return {
@@ -624,7 +1144,39 @@ const app = createApp({
             addSelectedTopics,
             closeModals,
             setTheme,
-            overallProgressSegments
+            overallProgressSegments,
+            upcomingDeadlines,
+            user,
+            showAddTopicModal,
+            openAddTopicModal,
+            addTopicFromModal,
+            isAuthenticated,
+            currentUser,
+            loginCredentials,
+            loginError,
+            login,
+            logout,
+            showProfileDropdown,
+            toggleProfileDropdown,
+            openSettings,
+            authState,
+            makeAuthenticatedRequest,
+            showSettingsModal,
+            handleProfilePictureChange,
+            resetProfilePicture,
+            defaultProfilePicture,
+            isRegistering,
+            register,
+            registeredUsers,
+            settingsData,
+            settingsError,
+            saveSettings,
+            activeTab,
+            setActiveTab,
+            markTopicCompleted,
+            completedTopics,
+            closeProfileDropdown,
+            deleteUser
         };
     }
 });
@@ -635,18 +1187,13 @@ app.component('progress-circle', {
         <div class="progress-circle">
             <svg class="progress-ring" width="120" height="120">
                 <circle class="progress-ring__circle-bg" stroke-width="8" fill="transparent" r="52" cx="60" cy="60"/>
-                <g v-if="totalProgress > 0" transform="rotate(-90, 60, 60)">
-                    <circle v-for="(segment, index) in segments"
-                            class="progress-ring__circle"
-                            stroke-width="8"
-                            fill="transparent"
-                            r="52"
-                            cx="60"
-                            cy="60"
-                            :stroke="segment.color"
-                            :stroke-dasharray="circumference"
-                            :stroke-dashoffset="calculateOffset(index)"
-                    />
+                <g v-if="totalProgress > 0">
+                    <path v-for="(segment, index) in visibleSegments"
+                          :d="getSegmentPath(segment, index)"
+                          :stroke="segment.color"
+                          stroke-width="8"
+                          fill="transparent"
+                          stroke-linecap="round"/>
                 </g>
             </svg>
             <span class="progress-text">{{ totalProgress }}%</span>
@@ -654,6 +1201,7 @@ app.component('progress-circle', {
     `,
     data() {
         return {
+            radius: 52,
             circumference: 2 * Math.PI * 52
         };
     },
@@ -663,19 +1211,31 @@ app.component('progress-circle', {
                 return 0;
             }
             return Math.round(this.segments.reduce((acc, segment) => acc + segment.percentage, 0));
+        },
+        visibleSegments() {
+            return this.segments.filter(segment => segment.color !== '#e0e0e0' && segment.percentage > 0);
         }
     },
     methods: {
-        calculateOffset(index) {
-            const percentageSoFar = this.segments.slice(0, index).reduce((acc, segment) => acc + segment.percentage, 0);
-            const segmentPercentage = this.segments[index].percentage;
-            const totalPercentage = 100;
+        getSegmentPath(segment, index) {
+            const startAngle = this.getStartAngle(index);
+            const endAngle = startAngle + (segment.percentage / 100) * 360;
 
-            const dash = (segmentPercentage / totalPercentage) * this.circumference;
-            const gap = this.circumference - dash;
-            const offset = (percentageSoFar / totalPercentage) * this.circumference;
+            const startX = 60 + this.radius * Math.cos((startAngle * Math.PI) / 180);
+            const startY = 60 + this.radius * Math.sin((startAngle * Math.PI) / 180);
+            const endX = 60 + this.radius * Math.cos((endAngle * Math.PI) / 180);
+            const endY = 60 + this.radius * Math.sin((endAngle * Math.PI) / 180);
 
-            return this.circumference - offset - dash;
+            const largeArcFlag = segment.percentage > 50 ? 1 : 0;
+
+            return `M ${startX} ${startY} A ${this.radius} ${this.radius} 0 ${largeArcFlag} 1 ${endX} ${endY}`;
+        },
+        getStartAngle(index) {
+            let startAngle = -90; // Start from top
+            for (let i = 0; i < index; i++) {
+                startAngle += (this.visibleSegments[i].percentage / 100) * 360;
+            }
+            return startAngle;
         }
     }
 });
