@@ -1,0 +1,323 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'CloudFormation template for Career Study Plan application on EC2'
+
+Parameters:
+  InstanceType:
+    Type: String
+    Default: t3.micro
+    AllowedValues:
+      - t3.micro
+      - t3.small
+      - t3.medium
+    Description: EC2 instance type
+    
+  KeyPairName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: Name of an existing EC2 KeyPair to enable SSH access
+    
+  GeminiApiKey:
+    Type: String
+    Default: ''
+    Description: Optional Gemini API key for AI suggestions
+    NoEcho: true
+
+Resources:
+  # VPC and Networking
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: CareerPlan-VPC
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: CareerPlan-IGW
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: CareerPlan-PublicSubnet
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: CareerPlan-PublicRT
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref PublicRouteTable
+
+  # Security Group
+  WebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Career Study Plan web server
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+          Description: SSH access
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: HTTP access
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: HTTPS access
+        - IpProtocol: tcp
+          FromPort: 3000
+          ToPort: 3000
+          CidrIp: 0.0.0.0/0
+          Description: Node.js application
+        - IpProtocol: tcp
+          FromPort: 8000
+          ToPort: 8000
+          CidrIp: 0.0.0.0/0
+          Description: Frontend server
+      Tags:
+        - Key: Name
+          Value: CareerPlan-SecurityGroup
+
+  # IAM Role for EC2 (for potential future AWS service integrations)
+  EC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+      Tags:
+        - Key: Name
+          Value: CareerPlan-EC2Role
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref EC2Role
+
+  # EC2 Instance
+  WebServerInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0c02fb55956c7d316  # Amazon Linux 2 AMI (update as needed)
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyPairName
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      SubnetId: !Ref PublicSubnet
+      SecurityGroupIds:
+        - !Ref WebServerSecurityGroup
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum update -y
+          
+          # Install Node.js 18.x
+          curl -fsSL https://rpm.nodesource.com/setup_18.x | bash -
+          yum install -y nodejs git nginx
+          
+          # Install PM2 for process management
+          npm install -g pm2
+          
+          # Create application directory and clone repository
+          mkdir -p /opt/career-study-plan
+          cd /opt/career-study-plan
+          
+          # Clone the GitHub repository
+          git clone https://github.com/SantiagoGarces16/study-plan.git .
+          
+          # Set proper ownership
+          chown -R ec2-user:ec2-user /opt/career-study-plan
+          
+          # Install server dependencies
+          cd server
+          npm install
+          
+          # Create .env file if Gemini API key is provided
+          if [ ! -z "${GeminiApiKey}" ]; then
+            echo "GEMINI_API_KEY=${GeminiApiKey}" > .env
+          fi
+          
+          # Start the application with PM2
+          pm2 start server.js --name "career-plan-server"
+          pm2 startup
+          pm2 save
+          
+          # Configure nginx as reverse proxy
+          cat > /etc/nginx/conf.d/career-plan.conf << 'NGINX_EOF'
+          server {
+              listen 80;
+              server_name _;
+              
+              # Serve static files
+              location / {
+                  root /opt/career-study-plan/client;
+                  try_files $uri $uri/ /index.html;
+              }
+              
+              # Proxy API requests to Node.js
+              location /api/ {
+                  proxy_pass http://localhost:3000;
+                  proxy_http_version 1.1;
+                  proxy_set_header Upgrade $http_upgrade;
+                  proxy_set_header Connection 'upgrade';
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto $scheme;
+                  proxy_cache_bypass $http_upgrade;
+              }
+          }
+          NGINX_EOF
+          
+          # Remove default nginx config
+          rm -f /etc/nginx/conf.d/default.conf
+          
+          # Start and enable nginx
+          systemctl start nginx
+          systemctl enable nginx
+          
+          # Restart nginx to apply configuration
+          systemctl restart nginx
+          
+          echo "Deployment complete! Application should be accessible via HTTP."
+          
+          # Create a README for deployment instructions
+          cat > /home/ec2-user/README-DEPLOYMENT.md << 'EOF'
+          # Career Study Plan - Deployment Complete!
+          
+          ## Application Status
+          
+          Your Career Study Plan application has been automatically deployed from:
+          https://github.com/SantiagoGarces16/study-plan
+          
+          ## Access Your Application
+          
+          - **Application**: http://YOUR_EC2_PUBLIC_IP/
+          - **API**: http://YOUR_EC2_PUBLIC_IP/api/
+          
+          ## Application Management
+          
+          ```bash
+          # Check application status
+          pm2 status
+          
+          # View real-time logs
+          pm2 logs career-plan-server
+          
+          # Restart application
+          pm2 restart career-plan-server
+          
+          # Stop application
+          pm2 stop career-plan-server
+          
+          # Monitor application
+          pm2 monit
+          ```
+          
+          ## Update Application
+          
+          To update to the latest version from GitHub:
+          ```bash
+          cd /opt/career-study-plan
+          sudo git pull origin main
+          cd server
+          sudo npm install  # If dependencies changed
+          pm2 restart career-plan-server
+          ```
+          
+          ## Troubleshooting
+          
+          - Check nginx status: `sudo systemctl status nginx`
+          - Check nginx logs: `sudo tail -f /var/log/nginx/error.log`
+          - Check application logs: `pm2 logs career-plan-server`
+          - Verify ports: `sudo netstat -tlnp | grep -E '(3000|80)'`
+          - Check git repository: `cd /opt/career-study-plan && git status`
+          
+          ## File Locations
+          
+          - Application: `/opt/career-study-plan/`
+          - Nginx config: `/etc/nginx/conf.d/career-plan.conf`
+          - Application logs: `pm2 logs career-plan-server`
+          - System logs: `/var/log/messages`
+          EOF
+          
+          chown ec2-user:ec2-user /home/ec2-user/README-DEPLOYMENT.md
+          
+          # Install CloudWatch agent (optional)
+          yum install -y amazon-cloudwatch-agent
+          
+      Tags:
+        - Key: Name
+          Value: CareerPlan-WebServer
+
+Outputs:
+  PublicIP:
+    Description: Public IP address of the web server
+    Value: !GetAtt WebServerInstance.PublicIp
+    Export:
+      Name: !Sub "${AWS::StackName}-PublicIP"
+      
+  PublicDNS:
+    Description: Public DNS name of the web server
+    Value: !GetAtt WebServerInstance.PublicDnsName
+    Export:
+      Name: !Sub "${AWS::StackName}-PublicDNS"
+      
+  ApplicationURL:
+    Description: URL to access the Career Study Plan application
+    Value: !Sub "http://${WebServerInstance.PublicIp}/"
+    
+  SSHCommand:
+    Description: SSH command to connect to the instance
+    Value: !Sub "ssh -i your-key.pem ec2-user@${WebServerInstance.PublicIp}"
+    
+  DeploymentStatus:
+    Description: Deployment status
+    Value: "Application automatically deployed from GitHub repository. Ready to use!"
+    
+  GitRepository:
+    Description: Source code repository
+    Value: "https://github.com/SantiagoGarces16/study-plan"

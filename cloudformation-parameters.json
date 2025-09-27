@@ -1,0 +1,14 @@
+[
+    {
+        "ParameterKey": "KeyPairName",
+        "ParameterValue": "your-key-pair-name"
+    },
+    {
+        "ParameterKey": "InstanceType",
+        "ParameterValue": "t3.micro"
+    },
+    {
+        "ParameterKey": "GeminiApiKey",
+        "ParameterValue": "your-gemini-api-key-here"
+    }
+]
