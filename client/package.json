@@ -4,7 +4,9 @@
   "description": "Client for the Career Study Plan app",
   "main": "app.js",
   "scripts": {
-    "start": "python -m http.server 8000"
+    "start": "python -m http.server 8000",
+    "dev": "python -m http.server 8000",
+    "test": "echo \"No tests specified\" && exit 0"
   },
   "dependencies": {}
 }
