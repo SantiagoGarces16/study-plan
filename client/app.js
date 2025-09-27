@@ -1,3 +1,4 @@
+
 const { createApp, ref, onMounted, computed, nextTick } = Vue;
 
 const app = createApp({
@@ -9,12 +10,12 @@ const app = createApp({
                     <h1>{{ isRegistering ? 'Register for Career Study Plan' : 'Login to Career Study Plan' }}</h1>
                     <form @submit.prevent="isRegistering ? register() : login()">
                         <div class="form-group">
-                            <label>Username:</label>
-                            <input v-model="loginCredentials.username" required>
+                             <label>Username:</label>
+                             <input v-model="loginCredentials.username" required>
                         </div>
                         <div class="form-group">
-                            <label>Password:</label>
-                            <input v-model="loginCredentials.password" type="password" required>
+                             <label>Password:</label>
+                             <input v-model="loginCredentials.password" type="password" required>
                         </div>
                         <button type="submit">{{ isRegistering ? 'Register' : 'Login' }}</button>
                     </form>
@@ -31,7 +32,7 @@ const app = createApp({
                         <div class="user-profile" v-if="isAuthenticated">
                             <div class="profile-dropdown-container">
                                 <button @click="toggleProfileDropdown" class="profile-button">
-                                    <img :src="currentUser.profilePicture || defaultProfilePicture" alt="User Profile" class="profile-picture">
+                                    <img :src="(currentUser && currentUser.profilePicture) || defaultProfilePicture.value" alt="User Profile" class="profile-picture" @error="handleImageError">
                                 </button>
                                 <div v-if="showProfileDropdown" class="profile-dropdown">
                                     <button @click="openSettings">Settings</button>
@@ -80,7 +81,7 @@ const app = createApp({
                         <div class="user-profile" v-if="isAuthenticated">
                             <div class="profile-dropdown-container">
                                 <button @click="toggleProfileDropdown" class="profile-button">
-                                    <img :src="currentUser.profilePicture || defaultProfilePicture" alt="User Profile" class="profile-picture">
+                                    <img :src="(currentUser && currentUser.profilePicture) || defaultProfilePicture.value" alt="User Profile" class="profile-picture" @error="handleImageError">
                                 </button>
                                 <div v-if="showProfileDropdown" class="profile-dropdown">
                                     <button @click="openSettings">Settings</button>
@@ -322,7 +323,7 @@ const app = createApp({
                             <div class="form-group">
                                 <label>Profile Picture:</label>
                                 <div class="profile-picture-preview">
-                                    <img :src="currentUser.profilePicture || defaultProfilePicture" alt="Current Profile Picture" class="profile-picture-large">
+                                    <img :src="(currentUser && currentUser.profilePicture) || defaultProfilePicture.value" alt="Current Profile Picture" class="profile-picture-large" @error="handleImageError">
                                 </div>
                                 <input type="file" @change="handleProfilePictureChange" accept="image/*" class="file-input">
                                 <button @click="resetProfilePicture" class="reset-btn">Reset to Default</button>
@@ -345,7 +346,7 @@ const app = createApp({
         const loginError = ref('');
         const showProfileDropdown = ref(false);
         const showSettingsModal = ref(false);
-        const defaultProfilePicture = ref('./Assets/Default profile picture.jpg');
+        const defaultProfilePicture = ref('../Assets/Default profile picture.jpg');
         const isRegistering = ref(false);
         const registeredUsers = ref(JSON.parse(localStorage.getItem('registeredUsers') || '[]'));
         const settingsData = ref({ username: '', newPassword: '', confirmPassword: '', theme: 'theme-light' });
@@ -482,27 +483,43 @@ const app = createApp({
 
         const fetchPlans = async () => {
             try {
-                const res = await fetch('http://localhost:3000/api/plans');
+                const timestamp = Date.now(); // Cache buster
+                const res = await fetch(`http://localhost:3000/api/plans?t=${timestamp}`, {
+                    method: 'GET',
+                    headers: {
+                        'Cache-Control': 'no-cache, no-store, must-revalidate',
+                        'Pragma': 'no-cache',
+                        'Expires': '0'
+                    }
+                });
                 const allPlans = await res.json();
 
-                // Handle legacy plans (without userId) by assigning them to current user
-                const legacyPlans = allPlans.filter(plan => !plan.userId);
-                if (legacyPlans.length > 0) {
-                    // Assign all legacy plans to current user
-                    for (const plan of legacyPlans) {
-                        plan.userId = currentUser.value.username;
-                        await fetch(`http://localhost:3000/api/plans/${plan.id}`, {
-                            method: 'PUT',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ userId: currentUser.value.username })
-                        });
+                // Automatically claim any plans without userId for this user (one-time migration)
+                const orphanPlans = allPlans.filter(plan => !plan.userId);
+                if (orphanPlans.length > 0) {
+                    console.log(`Found ${orphanPlans.length} orphan plans - assigning to current user`);
+                    for (const plan of orphanPlans) {
+                        try {
+                            await fetch(`http://localhost:3000/api/plans/${plan.id}`, {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ userId: currentUser.value.username })
+                            });
+                        } catch (updateError) {
+                            console.error('Error updating orphan plan:', updateError);
+                        }
                     }
                 }
 
-                // Always filter to show only current user's plans
+                // Now filter to show only current user's plans
                 plans.value = allPlans.filter(plan => plan.userId === currentUser.value.username);
+
+                console.log(`Loaded ${plans.value.length} plans for user ${currentUser.value.username}`);
+                console.log('All fetched plans:', allPlans);
+                console.log('Filtered plans:', plans.value);
             } catch (error) {
                 console.error('Error fetching plans:', error);
+                plans.value = []; // Ensure we have an empty array on error
             } finally {
                 loading.value = false;
             }
@@ -573,7 +590,9 @@ const app = createApp({
                 });
                 const newPlan = await res.json();
                 newPlanName.value = '';
-                await fetchPlans();
+
+                // Force fresh fetch to get updated data
+                setTimeout(() => fetchPlans(), 100);
                 enterPlanView(newPlan.id);
             } catch (error) {
                 console.error('Error adding plan:', error);
@@ -730,24 +749,24 @@ const app = createApp({
                 : `http://localhost:3000/api/plans/${selectedPlan.value.id}/milestones/${id}`;
 
             const body = {
-                 text: editingItem.value.text,
-                 date: editingItem.value.date,
-                 color: editingItem.value.color,
-                 userId: currentUser.value.username
-             };
-             if (isTopic) {
-                 body.milestoneId = editingItem.value.milestoneId;
-                 body.completed = editingItem.value.completed;
-             }
+                  text: editingItem.value.text,
+                  date: editingItem.value.date,
+                  color: editingItem.value.color,
+                  userId: currentUser.value.username
+              };
+              if (isTopic) {
+                  body.milestoneId = editingItem.value.milestoneId;
+                  body.completed = editingItem.value.completed;
+              }
 
-             await fetch(url, {
-                 method: 'PUT',
-                 headers: { 'Content-Type': 'application/json' },
-                 body: JSON.stringify({ ...body, lastEdited: new Date().toISOString() })
-             });
-            closeModals();
-            const res = await fetch(`http://localhost:3000/api/plans/${selectedPlan.value.id}`);
-            selectedPlan.value = await res.json();
+              await fetch(url, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ ...body, lastEdited: new Date().toISOString() })
+              });
+             closeModals();
+             const res = await fetch(`http://localhost:3000/api/plans/${selectedPlan.value.id}`);
+             selectedPlan.value = await res.json();
         };
 
         const toggleTopicCompletion = async (topic) => {
@@ -863,14 +882,16 @@ const app = createApp({
 
         const register = async () => {
             if (loginCredentials.value.username && loginCredentials.value.password) {
-                // Check if user already exists
-                const existingUser = registeredUsers.value.find(u => u.username === loginCredentials.value.username);
+                const usernameLower = loginCredentials.value.username.toLowerCase();
+
+                // Check if user already exists (case insensitive)
+                const existingUser = registeredUsers.value.find(u => u.username.toLowerCase() === usernameLower);
                 if (existingUser) {
                     loginError.value = 'Username already exists';
                     return;
                 }
 
-                // Add new user
+                // Add new user (store in original case)
                 const newUser = {
                     username: loginCredentials.value.username,
                     password: loginCredentials.value.password,
@@ -897,10 +918,12 @@ const app = createApp({
         };
 
         const login = async () => {
-            // Check against registered users
+            // Check against registered users (case insensitive)
             if (loginCredentials.value.username && loginCredentials.value.password) {
+                const usernameLower = loginCredentials.value.username.toLowerCase();
+
                 const user = registeredUsers.value.find(u =>
-                    u.username === loginCredentials.value.username && u.password === loginCredentials.value.password
+                    u.username.toLowerCase() === usernameLower && u.password === loginCredentials.value.password
                 );
 
                 if (user) {
@@ -926,8 +949,10 @@ const app = createApp({
         const logout = () => {
             isAuthenticated.value = false;
             currentUser.value = null;
+            // Clear all authentication data
             localStorage.removeItem('isAuthenticated');
             localStorage.removeItem('currentUser');
+            localStorage.removeItem('sessionToken');
             currentView.value = 'mainMenu';
             selectedPlan.value = null;
             plans.value = [];
@@ -989,21 +1014,30 @@ const app = createApp({
             return fetch(url, defaultOptions);
         };
 
+        const handleImageError = (event) => {
+            // Fallback to default picture if current picture fails to load
+            event.target.src = defaultProfilePicture.value;
+        };
+
         const handleProfilePictureChange = (event) => {
             const file = event.target.files[0];
             if (file) {
                 const reader = new FileReader();
                 reader.onload = (e) => {
-                    currentUser.value.profilePicture = e.target.result;
-                    localStorage.setItem('currentUser', JSON.stringify(currentUser.value));
+                    if (currentUser.value) {
+                        currentUser.value.profilePicture = e.target.result;
+                        localStorage.setItem('currentUser', JSON.stringify(currentUser.value));
+                    }
                 };
                 reader.readAsDataURL(file);
             }
         };
 
         const resetProfilePicture = () => {
-            currentUser.value.profilePicture = defaultProfilePicture.value;
-            localStorage.setItem('currentUser', JSON.stringify(currentUser.value));
+            if (currentUser.value) {
+                currentUser.value.profilePicture = defaultProfilePicture.value;
+                localStorage.setItem('currentUser', JSON.stringify(currentUser.value));
+            }
         };
 
         const setActiveTab = (tab) => {
@@ -1073,23 +1107,51 @@ const app = createApp({
         };
 
         const checkAuthStatus = () => {
-            const authStatus = localStorage.getItem('isAuthenticated');
-            if (authStatus === 'true') {
-                isAuthenticated.value = true;
-                const userData = localStorage.getItem('currentUser');
-                if (userData) {
-                    currentUser.value = JSON.parse(userData);
-                }
-            }
+            // Check server session token to detect server restart
+            fetch('http://localhost:3000/api/session')
+                .then(response => response.json())
+                .then(data => {
+                    const storedSessionToken = localStorage.getItem('sessionToken');
+                    const currentSessionToken = data.sessionToken;
+
+                    // If session tokens don't match, server restarted - force logout
+                    if (storedSessionToken && storedSessionToken !== currentSessionToken) {
+                        console.log('Server restarted, forcing logout');
+                        logout();
+                        return;
+                    }
+
+                    // Store the current session token
+                    localStorage.setItem('sessionToken', currentSessionToken);
+
+                    // Proceed with normal auth check
+                    const authStatus = localStorage.getItem('isAuthenticated');
+                    if (authStatus === 'true') {
+                        isAuthenticated.value = true;
+                        const userData = localStorage.getItem('currentUser');
+                        if (userData) {
+                            currentUser.value = JSON.parse(userData);
+                            fetchPlans();
+                        } else {
+                            loading.value = false;
+                        }
+                    } else {
+                        loading.value = false;
+                    }
+                })
+                .catch(error => {
+                    console.error('Cannot connect to server:', error);
+                    // If server is down, force logout
+                    localStorage.removeItem('isAuthenticated');
+                    localStorage.removeItem('currentUser');
+                    isAuthenticated.value = false;
+                    loading.value = false;
+                });
         };
 
         onMounted(() => {
+            console.log('App starting...');
             checkAuthStatus();
-            if (isAuthenticated.value) {
-                fetchPlans();
-            } else {
-                loading.value = false; // Allow login form to show if not authenticated
-            }
             setTheme(theme.value);
 
             // Add click outside listener for profile dropdown
@@ -1164,6 +1226,7 @@ const app = createApp({
             showSettingsModal,
             handleProfilePictureChange,
             resetProfilePicture,
+            handleImageError,
             defaultProfilePicture,
             isRegistering,
             register,

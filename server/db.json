@@ -1,8 +1,47 @@
 {
   "plans": [
     {
-      "id": 1755798492809,
+      "id": 1756603143017,
       "name": "IT Plan",
+      "topics": [
+        {
+          "id": 1758903581037,
+          "text": "HTML",
+          "date": "2025-10-02",
+          "color": "#f1c40f",
+          "milestoneId": 1758903519392,
+          "completed": true
+        }
+      ],
+      "milestones": [
+        {
+          "id": 1758903499249,
+          "text": "Certificate",
+          "date": "2025-10-10",
+          "color": "#9b59b6"
+        },
+        {
+          "id": 1758903519392,
+          "text": "Create a website",
+          "date": "2025-10-11",
+          "color": "#9b59b6"
+        }
+      ],
+      "notes": "",
+      "userId": "san1604"
+    },
+    {
+      "id": 1756603388407,
+      "name": "CS Plan",
+      "userId": "san1604",
+      "topics": [],
+      "milestones": [],
+      "notes": ""
+    },
+    {
+      "id": 1756603414434,
+      "name": "IT Plan#2",
+      "userId": "French_Santa",
       "topics": [],
       "milestones": [],
       "notes": ""

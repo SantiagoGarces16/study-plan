@@ -24,7 +24,7 @@ const writeData = (data) => {
 // Plans API
 app.get('/api/plans', (req, res) => {
     const data = readData();
-    res.json(data.plans.map(p => ({ id: p.id, name: p.name })));
+    res.json(data.plans);
 });
 
 app.post('/api/plans', (req, res) => {
@@ -32,6 +32,7 @@ app.post('/api/plans', (req, res) => {
     const newPlan = {
         id: Date.now(),
         name: req.body.name,
+        userId: req.body.userId,
         topics: [],
         milestones: [],
         notes: ""
@@ -58,6 +59,9 @@ app.put('/api/plans/:planId', (req, res) => {
         plan.name = req.body.name || plan.name;
         if (req.body.notes !== undefined) {
             plan.notes = req.body.notes;
+        }
+        if (req.body.userId !== undefined) {
+            plan.userId = req.body.userId;
         }
         writeData(data);
         res.json(plan);
@@ -245,6 +249,14 @@ app.post('/api/suggestions', async (req, res) => {
     }
 });
 
+// Generate a unique session token for this server instance
+const serverSessionToken = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+
+app.get('/api/session', (req, res) => {
+    res.json({ sessionToken: serverSessionToken });
+});
+
 app.listen(port, () => {
     console.log(`Server running on http://localhost:${port}`);
+    console.log(`Session token: ${serverSessionToken}`);
 });
