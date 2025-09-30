@@ -10,12 +10,39 @@ const app = createApp({
                     <h1>{{ isRegistering ? 'Register for Career Study Plan' : 'Login to Career Study Plan' }}</h1>
                     <form @submit.prevent="isRegistering ? register() : login()">
                         <div class="form-group">
-                             <label>Username:</label>
-                             <input v-model="loginCredentials.username" required>
+                             <label>{{ isRegistering ? 'Username:' : 'Username or Email:' }}</label>
+                             <input v-model="loginCredentials.username" :placeholder="isRegistering ? 'Choose a username' : 'Enter username or email'" required>
+                        </div>
+                        <div v-if="isRegistering" class="form-group">
+                             <label>Email:</label>
+                             <input v-model="loginCredentials.email" type="email" placeholder="Enter your email address" required>
                         </div>
                         <div class="form-group">
                              <label>Password:</label>
-                             <input v-model="loginCredentials.password" type="password" required>
+                             <div class="password-input-container">
+                                 <input v-model="loginCredentials.password" :type="showPassword ? 'text' : 'password'" required>
+                                 <button type="button" @click="showPassword = !showPassword" class="password-toggle-btn">
+                                     {{ showPassword ? '👁️' : '👁️‍🗨️' }}
+                                 </button>
+                             </div>
+                        </div>
+                        <div v-if="isRegistering" class="form-group">
+                             <label>First Name (optional):</label>
+                             <input v-model="loginCredentials.firstName" placeholder="Enter your first name">
+                        </div>
+                        <div v-if="isRegistering" class="form-group">
+                             <label>Last Name (optional):</label>
+                             <input v-model="loginCredentials.lastName" placeholder="Enter your last name">
+                        </div>
+                        <div v-if="isRegistering" class="form-group">
+                             <label>Date of Birth (optional):</label>
+                             <input v-model="loginCredentials.dateOfBirth" type="date">
+                        </div>
+                        <div v-if="!isRegistering" class="form-group checkbox-group">
+                             <label>
+                                 <input v-model="loginCredentials.stayLoggedIn" type="checkbox">
+                                 Stay logged in
+                             </label>
                         </div>
                         <button type="submit">{{ isRegistering ? 'Register' : 'Login' }}</button>
                     </form>
@@ -342,15 +369,25 @@ const app = createApp({
         const user = ref({ profilePicture: '' });
         const isAuthenticated = ref(false);
         const currentUser = ref(null);
-        const loginCredentials = ref({ username: '', password: '' });
+        const loginCredentials = ref({ username: '', email: '', password: '', firstName: '', lastName: '', dateOfBirth: '', stayLoggedIn: false });
         const loginError = ref('');
         const showProfileDropdown = ref(false);
         const showSettingsModal = ref(false);
-        const defaultProfilePicture = ref('../Assets/Default profile picture.jpg');
+        const defaultProfilePicture = ref('./Assets/default-profile-picture.jpg');
         const isRegistering = ref(false);
+        const showPassword = ref(false);
         const registeredUsers = ref(JSON.parse(localStorage.getItem('registeredUsers') || '[]'));
+
+        // Migration: ensure all existing users have email field
+        registeredUsers.value = registeredUsers.value.map(user => ({
+            ...user,
+            email: user.email || '' // Add empty email if missing
+        }));
         const settingsData = ref({ username: '', newPassword: '', confirmPassword: '', theme: 'theme-light' });
         const settingsError = ref('');
+        const sessionTimeout = ref(null);
+        const serverSessionToken = ref(null);
+        const lastActivityTime = ref(Date.now());
         const newPlanName = ref('');
         const newTopic = ref({ text: '', date: '', color: '#f1c40f', milestoneId: '' });
         const newMilestone = ref({ text: '', date: '', color: '#9b59b6' });
@@ -564,20 +601,27 @@ const app = createApp({
         };
 
         const enterPlanView = async (planId) => {
+            console.log('Entering plan view for plan ID:', planId);
             try {
                 const res = await fetch(`http://localhost:3000/api/plans/${planId}`);
+                if (!res.ok) {
+                    throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+                }
                 selectedPlan.value = await res.json();
                 planName.value = selectedPlan.value.name;
                 currentView.value = 'planView';
+                console.log('Successfully switched to plan view:', selectedPlan.value.name);
                 await nextTick();
                 initializeCalendar();
             } catch (error) {
                 console.error('Error loading plan:', error);
+                alert(`Error loading plan: ${error.message}`);
             }
         };
 
         const addPlan = async () => {
             if (!newPlanName.value) return;
+            console.log('Creating new plan:', newPlanName.value);
             try {
                 const res = await fetch('http://localhost:3000/api/plans', {
                     method: 'POST',
@@ -588,7 +632,13 @@ const app = createApp({
                         lastEdited: new Date().toISOString()
                     })
                 });
+
+                if (!res.ok) {
+                    throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+                }
+
                 const newPlan = await res.json();
+                console.log('Plan created successfully:', newPlan);
                 newPlanName.value = '';
 
                 // Force fresh fetch to get updated data
@@ -596,6 +646,7 @@ const app = createApp({
                 enterPlanView(newPlan.id);
             } catch (error) {
                 console.error('Error adding plan:', error);
+                alert(`Error creating plan: ${error.message}`);
             }
         };
 
@@ -749,24 +800,24 @@ const app = createApp({
                 : `http://localhost:3000/api/plans/${selectedPlan.value.id}/milestones/${id}`;
 
             const body = {
-                  text: editingItem.value.text,
-                  date: editingItem.value.date,
-                  color: editingItem.value.color,
-                  userId: currentUser.value.username
-              };
-              if (isTopic) {
-                  body.milestoneId = editingItem.value.milestoneId;
-                  body.completed = editingItem.value.completed;
-              }
+                text: editingItem.value.text,
+                date: editingItem.value.date,
+                color: editingItem.value.color,
+                userId: currentUser.value.username
+            };
+            if (isTopic) {
+                body.milestoneId = editingItem.value.milestoneId;
+                body.completed = editingItem.value.completed;
+            }
 
-              await fetch(url, {
-                  method: 'PUT',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ ...body, lastEdited: new Date().toISOString() })
-              });
-             closeModals();
-             const res = await fetch(`http://localhost:3000/api/plans/${selectedPlan.value.id}`);
-             selectedPlan.value = await res.json();
+            await fetch(url, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ...body, lastEdited: new Date().toISOString() })
+            });
+            closeModals();
+            const res = await fetch(`http://localhost:3000/api/plans/${selectedPlan.value.id}`);
+            selectedPlan.value = await res.json();
         };
 
         const toggleTopicCompletion = async (topic) => {
@@ -881,49 +932,93 @@ const app = createApp({
         };
 
         const register = async () => {
-            if (loginCredentials.value.username && loginCredentials.value.password) {
-                const usernameLower = loginCredentials.value.username.toLowerCase();
+            // Only require username, email, and password - rest are optional
+            if (loginCredentials.value.username && loginCredentials.value.email && loginCredentials.value.password) {
 
-                // Check if user already exists (case insensitive)
-                const existingUser = registeredUsers.value.find(u => u.username.toLowerCase() === usernameLower);
-                if (existingUser) {
+                const usernameLower = loginCredentials.value.username.toLowerCase();
+                const emailLower = loginCredentials.value.email.toLowerCase();
+
+                console.log('Registering user:', {
+                    username: loginCredentials.value.username,
+                    email: loginCredentials.value.email,
+                    existingUsers: registeredUsers.value.length
+                });
+
+                // Check if username already exists (case insensitive)
+                const existingUsername = registeredUsers.value.find(u => u.username.toLowerCase() === usernameLower);
+                if (existingUsername) {
                     loginError.value = 'Username already exists';
+                    return;
+                }
+
+                // Check if email already exists (case insensitive)
+                const existingEmail = registeredUsers.value.find(u => u.email && u.email.toLowerCase() === emailLower);
+                if (existingEmail) {
+                    loginError.value = 'Email already exists';
                     return;
                 }
 
                 // Add new user (store in original case)
                 const newUser = {
                     username: loginCredentials.value.username,
+                    email: loginCredentials.value.email,
                     password: loginCredentials.value.password,
+                    firstName: loginCredentials.value.firstName,
+                    lastName: loginCredentials.value.lastName,
+                    dateOfBirth: loginCredentials.value.dateOfBirth,
                     profilePicture: defaultProfilePicture.value
                 };
                 registeredUsers.value.push(newUser);
                 localStorage.setItem('registeredUsers', JSON.stringify(registeredUsers.value));
 
-                // Auto login after registration
+                // Auto login after registration (always stay logged in for registration)
                 isAuthenticated.value = true;
                 currentUser.value = {
                     username: newUser.username,
+                    email: newUser.email,
+                    firstName: newUser.firstName,
+                    lastName: newUser.lastName,
+                    dateOfBirth: newUser.dateOfBirth,
                     profilePicture: newUser.profilePicture
                 };
                 localStorage.setItem('isAuthenticated', 'true');
                 localStorage.setItem('currentUser', JSON.stringify(currentUser.value));
-                loginCredentials.value = { username: '', password: '' };
+                localStorage.setItem('stayLoggedIn', 'true');
+                loginCredentials.value = { username: '', email: '', password: '', firstName: '', lastName: '', dateOfBirth: '', stayLoggedIn: false };
                 loginError.value = '';
                 isRegistering.value = false;
-                fetchPlans();
+                currentView.value = 'mainMenu'; // Ensure we go to main menu
+                loading.value = false; // Ensure loading is false
+
+                console.log('Registration successful, state:', {
+                    isAuthenticated: isAuthenticated.value,
+                    currentView: currentView.value,
+                    loading: loading.value
+                });
+
+                // Don't call checkServerSession immediately after registration
+                // as it might logout the user if server is not running
+                try {
+                    fetchPlans();
+                } catch (error) {
+                    console.error('Error fetching plans:', error);
+                    // Continue anyway - the main menu should still show even without server
+                }
             } else {
-                loginError.value = 'Please enter both username and password';
+                loginError.value = 'Please fill in username, email, and password (required fields)';
             }
         };
 
         const login = async () => {
-            // Check against registered users (case insensitive)
+            // Check against registered users (case insensitive) - accept username or email
             if (loginCredentials.value.username && loginCredentials.value.password) {
-                const usernameLower = loginCredentials.value.username.toLowerCase();
+                const inputLower = loginCredentials.value.username.toLowerCase();
 
+                // Find user by username OR email (case insensitive)
                 const user = registeredUsers.value.find(u =>
-                    u.username.toLowerCase() === usernameLower && u.password === loginCredentials.value.password
+                    (u.username.toLowerCase() === inputLower ||
+                        (u.email && u.email.toLowerCase() === inputLower)) &&
+                    u.password === loginCredentials.value.password
                 );
 
                 if (user) {
@@ -931,22 +1026,52 @@ const app = createApp({
                     // Ensure user has all required properties
                     currentUser.value = {
                         username: user.username,
+                        email: user.email || '',
+                        firstName: user.firstName || '',
+                        lastName: user.lastName || '',
+                        dateOfBirth: user.dateOfBirth || '',
                         profilePicture: user.profilePicture || defaultProfilePicture.value
                     };
                     localStorage.setItem('isAuthenticated', 'true');
                     localStorage.setItem('currentUser', JSON.stringify(currentUser.value));
-                    loginCredentials.value = { username: '', password: '' };
+                    localStorage.setItem('stayLoggedIn', loginCredentials.value.stayLoggedIn.toString());
+
+                    // Set up inactivity timer if not staying logged in
+                    if (!loginCredentials.value.stayLoggedIn) {
+                        startInactivityTimer();
+                    }
+
+                    loginCredentials.value = { username: '', email: '', password: '', firstName: '', lastName: '', dateOfBirth: '', stayLoggedIn: false };
                     loginError.value = '';
-                    fetchPlans();
+                    currentView.value = 'mainMenu'; // Ensure we go to main menu
+                    loading.value = false; // Ensure loading is false
+
+                    console.log('Login successful, state:', {
+                        isAuthenticated: isAuthenticated.value,
+                        currentView: currentView.value,
+                        loading: loading.value
+                    });
+
+                    // Don't call checkServerSession immediately after login
+                    // as it might logout the user if server is not running
+                    try {
+                        fetchPlans();
+                    } catch (error) {
+                        console.error('Error fetching plans:', error);
+                        // Continue anyway - the main menu should still show even without server
+                    }
                 } else {
-                    loginError.value = 'Invalid username or password';
+                    loginError.value = 'Invalid username/email or password';
                 }
             } else {
-                loginError.value = 'Please enter both username and password';
+                loginError.value = 'Please enter both username/email and password';
             }
         };
 
         const logout = () => {
+            // Clear session timeout
+            clearTimeout(sessionTimeout.value);
+
             isAuthenticated.value = false;
             currentUser.value = null;
             // Clear all authentication data
@@ -1015,8 +1140,9 @@ const app = createApp({
         };
 
         const handleImageError = (event) => {
-            // Fallback to default picture if current picture fails to load
-            event.target.src = defaultProfilePicture.value;
+            // Fallback to a simple placeholder if image fails to load
+            console.log('Profile picture failed to load, using placeholder');
+            event.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiNjY2MiLz4KPGNpcmNsZSBjeD0iMjAiIGN5PSIxNiIgcj0iNiIgZmlsbD0iIzk5OSIvPgo8cGF0aCBkPSJNMTAgMzJjMC02IDQtMTAgMTAtMTBzMTAgNCAxMCAxMCIgZmlsbD0iIzk5OSIvPgo8L3N2Zz4K';
         };
 
         const handleProfilePictureChange = (event) => {
@@ -1131,6 +1257,7 @@ const app = createApp({
                         const userData = localStorage.getItem('currentUser');
                         if (userData) {
                             currentUser.value = JSON.parse(userData);
+                            currentView.value = 'mainMenu'; // Ensure we go to main menu
                             fetchPlans();
                         } else {
                             loading.value = false;
@@ -1141,18 +1268,82 @@ const app = createApp({
                 })
                 .catch(error => {
                     console.error('Cannot connect to server:', error);
-                    // If server is down, force logout
-                    localStorage.removeItem('isAuthenticated');
-                    localStorage.removeItem('currentUser');
-                    isAuthenticated.value = false;
+                    // If server is down, don't force logout - just proceed with local auth check
+                    const authStatus = localStorage.getItem('isAuthenticated');
+                    if (authStatus === 'true') {
+                        isAuthenticated.value = true;
+                        const userData = localStorage.getItem('currentUser');
+                        if (userData) {
+                            currentUser.value = JSON.parse(userData);
+                            currentView.value = 'mainMenu';
+                            // Don't try to fetch plans if server is down
+                            console.log('Server unavailable, showing main menu without plans');
+                        }
+                    }
                     loading.value = false;
                 });
+        };
+
+        // Session management functions
+        const checkServerSession = async () => {
+            try {
+                const response = await fetch('http://localhost:3000/api/session');
+                const data = await response.json();
+                const storedSessionToken = localStorage.getItem('sessionToken');
+
+                if (storedSessionToken && storedSessionToken !== data.sessionToken) {
+                    console.log('Server restarted, logging out user');
+                    logout();
+                    return false;
+                }
+
+                localStorage.setItem('sessionToken', data.sessionToken);
+                serverSessionToken.value = data.sessionToken;
+                return true;
+            } catch (error) {
+                console.error('Server connection failed:', error);
+                // Don't logout on server connection failure - just return false
+                return false;
+            }
+        };
+
+        const startInactivityTimer = () => {
+            clearTimeout(sessionTimeout.value);
+
+            const checkInactivity = () => {
+                const now = Date.now();
+                const timeSinceLastActivity = now - lastActivityTime.value;
+                const tenMinutes = 10 * 60 * 1000; // 10 minutes in milliseconds
+
+                if (timeSinceLastActivity >= tenMinutes) {
+                    console.log('User inactive for 10 minutes, logging out');
+                    logout();
+                } else {
+                    // Check again in 1 minute
+                    sessionTimeout.value = setTimeout(checkInactivity, 60000);
+                }
+            };
+
+            sessionTimeout.value = setTimeout(checkInactivity, 60000); // Check every minute
+        };
+
+        const updateLastActivity = () => {
+            lastActivityTime.value = Date.now();
+        };
+
+        // Add activity listeners
+        const setupActivityListeners = () => {
+            const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'];
+            events.forEach(event => {
+                document.addEventListener(event, updateLastActivity, true);
+            });
         };
 
         onMounted(() => {
             console.log('App starting...');
             checkAuthStatus();
             setTheme(theme.value);
+            setupActivityListeners();
 
             // Add click outside listener for profile dropdown
             document.addEventListener('click', (event) => {
@@ -1229,6 +1420,7 @@ const app = createApp({
             handleImageError,
             defaultProfilePicture,
             isRegistering,
+            showPassword,
             register,
             registeredUsers,
             settingsData,

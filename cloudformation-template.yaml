@@ -20,6 +20,11 @@ Parameters:
     Default: ''
     Description: Optional Gemini API key for AI suggestions
     NoEcho: true
+    
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64
+    Description: Latest Amazon Linux 2023 AMI ID (automatically updated)
 
 Resources:
   # VPC and Networking
@@ -79,6 +84,64 @@ Resources:
       SubnetId: !Ref PublicSubnet
       RouteTableId: !Ref PublicRouteTable
 
+  # VPC Endpoints for SSM (optional but recommended for security)
+  SSMEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VPC
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ssm'
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref PublicSubnet
+      SecurityGroupIds:
+        - !Ref SSMEndpointSecurityGroup
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action:
+              - ssm:*
+            Resource: '*'
+
+  SSMMessagesEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VPC
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ssmmessages'
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref PublicSubnet
+      SecurityGroupIds:
+        - !Ref SSMEndpointSecurityGroup
+
+  EC2MessagesEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VPC
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ec2messages'
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref PublicSubnet
+      SecurityGroupIds:
+        - !Ref SSMEndpointSecurityGroup
+
+  # Security Group for SSM VPC Endpoints
+  SSMEndpointSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for SSM VPC endpoints
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          SourceSecurityGroupId: !Ref WebServerSecurityGroup
+          Description: HTTPS from EC2 instances
+      Tags:
+        - Key: Name
+          Value: CareerPlan-SSM-Endpoints-SG
+
   # Security Group
   WebServerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -115,7 +178,7 @@ Resources:
         - Key: Name
           Value: CareerPlan-SecurityGroup
 
-  # IAM Role for EC2 (for potential future AWS service integrations)
+  # IAM Role for EC2 with SSM Session Manager support
   EC2Role:
     Type: AWS::IAM::Role
     Properties:
@@ -128,6 +191,33 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+        - arn:aws:iam::aws:policy/AmazonSSMPatchAssociation
+      Policies:
+        - PolicyName: SSMSessionManagerPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:UpdateInstanceInformation
+                  - ssm:SendCommand
+                  - ssm:ListCommands
+                  - ssm:ListCommandInvocations
+                  - ssm:DescribeInstanceInformation
+                  - ssm:GetConnectionStatus
+                  - ssm:DescribeInstanceAssociationsStatus
+                  - ssmmessages:CreateControlChannel
+                  - ssmmessages:CreateDataChannel
+                  - ssmmessages:OpenControlChannel
+                  - ssmmessages:OpenDataChannel
+                  - ec2messages:AcknowledgeMessage
+                  - ec2messages:DeleteMessage
+                  - ec2messages:FailMessage
+                  - ec2messages:GetEndpoint
+                  - ec2messages:GetMessages
+                  - ec2messages:SendReply
+                Resource: '*'
       Tags:
         - Key: Name
           Value: CareerPlan-EC2Role
@@ -142,7 +232,7 @@ Resources:
   WebServerInstance:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: ami-0c02fb55956c7d316  # Amazon Linux 2 AMI (update as needed)
+      ImageId: !Ref LatestAmiId
       InstanceType: !Ref InstanceType
       KeyName: !Ref KeyPairName
       IamInstanceProfile: !Ref EC2InstanceProfile
@@ -152,52 +242,163 @@ Resources:
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash
-          yum update -y
+          set -e  # Exit on error
           
-          # Install Node.js 18.x
-          curl -fsSL https://rpm.nodesource.com/setup_18.x | bash -
-          yum install -y nodejs git nginx
+          # Log all output for debugging
+          exec > >(tee /var/log/user-data.log) 2>&1
+          
+          echo "Starting Amazon Linux 2023 deployment at $(date)"
+          
+          # Verify Amazon Linux 2023
+          echo "Detecting operating system..."
+          if [ -f /etc/os-release ]; then
+            echo "OS release info:"
+            cat /etc/os-release
+            
+            # Check if this is Amazon Linux 2023
+            if grep -q "Amazon Linux 2023" /etc/os-release; then
+              echo "Confirmed: Running on Amazon Linux 2023"
+            else
+              echo "WARNING: This script is optimized for Amazon Linux 2023" >&2
+            fi
+          fi
+          
+          # Update system using dnf (AL2023 package manager)
+          echo "Updating system packages..."
+          dnf update -y
+          
+          # Install basic packages using dnf (handle curl conflicts)
+          echo "Installing basic packages..."
+          dnf install -y git tar gzip wget which nginx nodejs npm --allowerasing
+          
+          # Verify nginx installation
+          if command -v nginx &> /dev/null; then
+            echo "Nginx installed successfully"
+            nginx -v
+          else
+            echo "ERROR: Nginx installation failed" >&2
+            exit 1
+          fi
+          
+          # SSM Agent configuration for AL2023
+          echo "Configuring SSM Agent..."
+          systemctl enable amazon-ssm-agent
+          systemctl start amazon-ssm-agent
+          systemctl status amazon-ssm-agent --no-pager
+          
+          # Verify Node.js installation (already installed with packages above)
+          echo "Verifying Node.js installation..."
+          if command -v node &> /dev/null && command -v npm &> /dev/null; then
+            echo "Node.js installed successfully via dnf"
+            echo "Node.js version: $(node --version)"
+            echo "npm version: $(npm --version)"
+          else
+            echo "ERROR: Node.js installation failed" >&2
+            exit 1
+          fi
           
           # Install PM2 for process management
+          echo "Installing PM2..."
           npm install -g pm2
           
+          # Verify PM2 installation
+          if command -v pm2 &> /dev/null; then
+            echo "PM2 installed successfully"
+            echo "PM2 version: $(pm2 --version)"
+          else
+            echo "ERROR: PM2 installation failed" >&2
+            exit 1
+          fi
+          
           # Create application directory and clone repository
+          echo "Setting up application directory..."
           mkdir -p /opt/career-study-plan
           cd /opt/career-study-plan
           
           # Clone the GitHub repository
-          git clone https://github.com/SantiagoGarces16/study-plan.git .
+          echo "Cloning repository..."
+          if git clone https://github.com/SantiagoGarces16/study-plan.git .; then
+            echo "✓ Repository cloned successfully"
+          else
+            echo "ERROR: Failed to clone repository" >&2
+            exit 1
+          fi
+          
+          # Verify repository structure
+          if [ -f "server/server.js" ] && [ -f "client/index.html" ]; then
+            echo "✓ Repository structure verified"
+          else
+            echo "ERROR: Invalid repository structure" >&2
+            exit 1
+          fi
           
           # Set proper ownership
           chown -R ec2-user:ec2-user /opt/career-study-plan
           
           # Install server dependencies
-          cd server
-          npm install
+          echo "Installing server dependencies..."
+          cd /opt/career-study-plan/server
+          if npm install; then
+            echo "✓ Server dependencies installed successfully"
+          else
+            echo "ERROR: Failed to install server dependencies" >&2
+            exit 1
+          fi
           
           # Create .env file if Gemini API key is provided
           if [ ! -z "${GeminiApiKey}" ]; then
             echo "GEMINI_API_KEY=${GeminiApiKey}" > .env
+            echo "✓ Gemini API key configured"
+          else
+            echo "GEMINI_API_KEY=your_api_key_here" > .env
+            echo "✓ Placeholder .env file created"
           fi
           
-          # Start the application with PM2
+          # Start the application with PM2 (set HOME environment variable)
+          echo "Starting application with PM2..."
+          export HOME=/root
           pm2 start server.js --name "career-plan-server"
-          pm2 startup
+          
+          # Set up PM2 to start on boot
+          pm2 startup systemd -u root --hp /root
           pm2 save
           
+          # Verify PM2 is running
+          echo "PM2 status:"
+          pm2 status
+          
           # Configure nginx as reverse proxy
+          echo "Configuring nginx for AL2023..."
+          
+          # Create nginx conf.d directory
+          mkdir -p /etc/nginx/conf.d
+          
+          # Backup original nginx.conf
+          cp /etc/nginx/nginx.conf /etc/nginx/nginx.conf.backup
+          
+          # Create a complete nginx configuration that overrides default
+          echo "Creating nginx configuration..."
+          
+          # First, create our site configuration
           cat > /etc/nginx/conf.d/career-plan.conf << 'NGINX_EOF'
           server {
-              listen 80;
+              listen 80 default_server;
+              listen [::]:80 default_server;
               server_name _;
               
-              # Serve static files
+              # Serve static files from our application
               location / {
                   root /opt/career-study-plan/client;
+                  index index.html;
                   try_files $uri $uri/ /index.html;
+                  
+                  # Security headers
+                  add_header X-Frame-Options "SAMEORIGIN" always;
+                  add_header X-Content-Type-Options "nosniff" always;
+                  add_header X-XSS-Protection "1; mode=block" always;
               }
               
-              # Proxy API requests to Node.js
+              # Proxy API requests to Node.js backend
               location /api/ {
                   proxy_pass http://localhost:3000;
                   proxy_http_version 1.1;
@@ -208,21 +409,186 @@ Resources:
                   proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
                   proxy_set_header X-Forwarded-Proto $scheme;
                   proxy_cache_bypass $http_upgrade;
+                  
+                  # Timeout settings
+                  proxy_connect_timeout 60s;
+                  proxy_send_timeout 60s;
+                  proxy_read_timeout 60s;
+              }
+              
+              # Handle favicon and other assets
+              location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg)$ {
+                  root /opt/career-study-plan/client;
+                  expires 1y;
+                  add_header Cache-Control "public, immutable";
               }
           }
           NGINX_EOF
           
-          # Remove default nginx config
+          # Also modify the main nginx.conf to ensure our config takes precedence
+          sed -i '/include \/etc\/nginx\/conf.d\/\*.conf;/a\    # Remove default server block' /etc/nginx/nginx.conf
+          
+          # Verify nginx configuration was created
+          if [ -f /etc/nginx/conf.d/career-plan.conf ]; then
+            echo "✓ Nginx configuration created successfully"
+            echo "Configuration content:"
+            cat /etc/nginx/conf.d/career-plan.conf
+          else
+            echo "ERROR: Failed to create nginx configuration" >&2
+            exit 1
+          fi
+          
+          # Verify the client directory exists and has content
+          if [ -f /opt/career-study-plan/client/index.html ]; then
+            echo "✓ Client application files found"
+            ls -la /opt/career-study-plan/client/
+          else
+            echo "ERROR: Client application files not found" >&2
+            echo "Directory contents:"
+            ls -la /opt/career-study-plan/
+            exit 1
+          fi
+          
+          # Fix client API URLs for production (replace localhost:3000 with relative URLs)
+          echo "Fixing client API URLs for production..."
+          cd /opt/career-study-plan/client
+          
+          # Replace all localhost:3000 references with relative URLs
+          sed -i 's|http://localhost:3000/api/|/api/|g' app.js
+          sed -i 's|http://localhost:3000/api/|/api/|g' *.js 2>/dev/null || true
+          
+          # Verify the changes were made
+          if grep -q "localhost:3000" app.js; then
+            echo "⚠ Warning: Some localhost references may still exist"
+            grep -n "localhost:3000" app.js || true
+          else
+            echo "✓ All localhost:3000 references replaced with relative URLs"
+          fi
+          
+          # Remove default nginx configs and backup main config
           rm -f /etc/nginx/conf.d/default.conf
+          rm -f /etc/nginx/sites-enabled/default 2>/dev/null || true
+          rm -f /etc/nginx/sites-available/default 2>/dev/null || true
+          cp /etc/nginx/nginx.conf /etc/nginx/nginx.conf.backup
           
-          # Start and enable nginx
-          systemctl start nginx
+          # Disable the default nginx welcome page by removing/renaming default configs
+          find /etc/nginx -name "*default*" -type f -exec rm -f {} \; 2>/dev/null || true
+          
+          # Test nginx configuration
+          echo "Testing nginx configuration..."
+          nginx -t
+          
+          # Remove default nginx configuration that might conflict
+          rm -f /etc/nginx/conf.d/default.conf
+          rm -f /etc/nginx/sites-enabled/default 2>/dev/null || true
+          
+          # Enable and start nginx
           systemctl enable nginx
+          systemctl start nginx
           
-          # Restart nginx to apply configuration
-          systemctl restart nginx
+          # Verify nginx is running
+          echo "Nginx status:"
+          systemctl status nginx --no-pager
           
-          echo "Deployment complete! Application should be accessible via HTTP."
+          echo "Amazon Linux 2023 deployment complete! Application should be accessible via HTTP."
+          
+          # Final verification - wait for services to be ready
+          echo "Performing final verification..."
+          sleep 15
+          
+          # Test if Node.js server is responding
+          if curl -s --connect-timeout 10 http://localhost:3000/api/plans > /dev/null; then
+            echo "✓ Backend API is responding"
+          else
+            echo "⚠ Backend API not responding yet - may need more time to start"
+          fi
+          
+          # Test if nginx is serving content
+          if curl -s --connect-timeout 10 http://localhost/ > /dev/null; then
+            echo "✓ Frontend is being served by nginx"
+          else
+            echo "⚠ Frontend not responding - check nginx configuration"
+          fi
+          
+          # Test if nginx proxy is working
+          if curl -s --connect-timeout 10 http://localhost/api/plans > /dev/null; then
+            echo "✓ Nginx proxy is working correctly"
+          else
+            echo "⚠ Nginx proxy not working - API requests may fail"
+          fi
+          
+          # Final verification and logging
+          echo "=== AL2023 DEPLOYMENT SUMMARY ===" >> /var/log/deployment.log
+          echo "$(date): Career Study Plan deployment completed on Amazon Linux 2023" >> /var/log/deployment.log
+          echo "OS Info: $(cat /etc/os-release | grep PRETTY_NAME)" >> /var/log/deployment.log
+          echo "Kernel: $(uname -r)" >> /var/log/deployment.log
+          echo "Node.js version: $(node --version)" >> /var/log/deployment.log
+          echo "npm version: $(npm --version)" >> /var/log/deployment.log
+          echo "PM2 version: $(pm2 --version)" >> /var/log/deployment.log
+          echo "Nginx version: $(nginx -v 2>&1)" >> /var/log/deployment.log
+          echo "" >> /var/log/deployment.log
+          
+          echo "Service Status:" >> /var/log/deployment.log
+          echo "PM2 status:" >> /var/log/deployment.log
+          pm2 status >> /var/log/deployment.log 2>&1 || echo "PM2 not running" >> /var/log/deployment.log
+          echo "" >> /var/log/deployment.log
+          echo "Nginx status:" >> /var/log/deployment.log
+          systemctl status nginx --no-pager >> /var/log/deployment.log
+          echo "" >> /var/log/deployment.log
+          echo "SSM Agent status:" >> /var/log/deployment.log
+          systemctl status amazon-ssm-agent --no-pager >> /var/log/deployment.log
+          echo "" >> /var/log/deployment.log
+          
+          # Test application endpoints
+          echo "Testing application endpoints..." >> /var/log/deployment.log
+          sleep 10
+          
+          # Test backend API
+          if curl -s --connect-timeout 10 http://localhost:3000/api/plans > /dev/null; then
+            echo "✓ Backend API responding" >> /var/log/deployment.log
+          else
+            echo "✗ Backend API test failed" >> /var/log/deployment.log
+          fi
+          
+          # Test frontend
+          if curl -s --connect-timeout 10 http://localhost/ > /dev/null; then
+            echo "✓ Frontend responding" >> /var/log/deployment.log
+          else
+            echo "✗ Frontend test failed" >> /var/log/deployment.log
+          fi
+          
+          # Test nginx proxy
+          if curl -s --connect-timeout 10 http://localhost/api/plans > /dev/null; then
+            echo "✓ Nginx proxy working" >> /var/log/deployment.log
+          else
+            echo "✗ Nginx proxy test failed" >> /var/log/deployment.log
+          fi
+          
+          echo "=== END AL2023 DEPLOYMENT SUMMARY ===" >> /var/log/deployment.log
+          
+          # Copy deployment log to application directory
+          cp /var/log/deployment.log /opt/career-study-plan/deployment.log
+          chown ec2-user:ec2-user /opt/career-study-plan/deployment.log
+          
+          # Create a simple status script for AL2023
+          cat > /opt/career-study-plan/status.sh << 'STATUS_EOF'
+          #!/bin/bash
+          echo "=== Career Study Plan Status (AL2023) ==="
+          echo "Date: $(date)"
+          echo "OS: $(cat /etc/os-release | grep PRETTY_NAME | cut -d'"' -f2)"
+          echo ""
+          echo "Services:"
+          systemctl is-active nginx && echo "✓ Nginx: Running" || echo "✗ Nginx: Stopped"
+          systemctl is-active amazon-ssm-agent && echo "✓ SSM Agent: Running" || echo "✗ SSM Agent: Stopped"
+          pm2 status > /dev/null 2>&1 && echo "✓ PM2: Running" || echo "✗ PM2: Stopped"
+          echo ""
+          echo "Application:"
+          curl -s --connect-timeout 5 http://localhost:3000/api/plans > /dev/null && echo "✓ Backend API: Responding" || echo "✗ Backend API: Not responding"
+          curl -s --connect-timeout 5 http://localhost/ > /dev/null && echo "✓ Frontend: Responding" || echo "✗ Frontend: Not responding"
+          STATUS_EOF
+          
+          chmod +x /opt/career-study-plan/status.sh
+          chown ec2-user:ec2-user /opt/career-study-plan/status.sh
           
           # Create a README for deployment instructions
           cat > /home/ec2-user/README-DEPLOYMENT.md << 'EOF'
@@ -310,9 +676,23 @@ Outputs:
     Description: URL to access the Career Study Plan application
     Value: !Sub "http://${WebServerInstance.PublicIp}/"
     
+  InstanceId:
+    Description: EC2 Instance ID for Session Manager connection
+    Value: !Ref WebServerInstance
+    Export:
+      Name: !Sub "${AWS::StackName}-InstanceId"
+      
   SSHCommand:
-    Description: SSH command to connect to the instance
+    Description: SSH command to connect to the instance (alternative to Session Manager)
     Value: !Sub "ssh -i your-key.pem ec2-user@${WebServerInstance.PublicIp}"
+    
+  SessionManagerCommand:
+    Description: AWS CLI command to connect via Session Manager
+    Value: !Sub "aws ssm start-session --target ${WebServerInstance}"
+    
+  SessionManagerConsoleURL:
+    Description: AWS Console URL to connect via Session Manager
+    Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/systems-manager/session-manager/${WebServerInstance}"
     
   DeploymentStatus:
     Description: Deployment status
